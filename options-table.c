@@ -79,6 +79,9 @@ static const char *options_table_pane_border_lines_list[] = {
 	"single", "double", "heavy", "simple", "number", "spaces", "none",
 	"rounded", NULL
 };
+static const char *options_table_pane_border_collapse_list[] = {
+	"off", "top", "bottom", "left", "right", "all", NULL
+};
 static const char *options_table_menu_border_lines_list[] = {
 	"single", "double", "heavy", "simple", "rounded", "padded", "none", NULL
 };
@@ -1568,6 +1571,16 @@ const struct options_table_entry options_table[] = {
 	  .maximum = USHRT_MAX,
 	  .default_num = 0,
 	  .text = "Index of the first pane in each window."
+	},
+
+	{ .name = "pane-border-collapse",
+	  .type = OPTIONS_TABLE_CHOICE,
+	  .scope = OPTIONS_TABLE_WINDOW|OPTIONS_TABLE_PANE,
+	  .choices = options_table_pane_border_collapse_list,
+	  .default_num = PANE_COLLAPSE_OFF,
+	  .text = "Which side of the pane is drawn over the separator "
+		  "between it and the next pane instead of leaving room for "
+		  "a border."
 	},
 
 	{ .name = "pane-border-format",
