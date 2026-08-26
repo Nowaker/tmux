@@ -199,18 +199,24 @@ tty_timer_callback(__unused int fd, __unused short events, void *data)
 	struct tty	*tty = data;
 	struct client	*c = tty->client;
 	struct timeval	 tv = { .tv_usec = TTY_BLOCK_INTERVAL };
+	size_t		 discarded = tty->discarded;
 
-	log_debug("%s: %zu discarded", c->name, tty->discarded);
+	log_debug("%s: %zu discarded", c->name, discarded);
+
+	c->discarded += discarded;
+	tty->discarded = 0;
+
+	if (EVBUFFER_LENGTH(tty->out) != 0) {
+		evtimer_add(&tty->timer, &tv);
+		return;
+	}
 
 	c->flags |= CLIENT_ALLREDRAWFLAGS;
-	c->discarded += tty->discarded;
-
-	if (tty->discarded < TTY_BLOCK_STOP(tty)) {
+	if (discarded < TTY_BLOCK_STOP(tty)) {
 		tty->flags &= ~TTY_BLOCK;
 		tty_invalidate(tty);
 		return;
 	}
-	tty->discarded = 0;
 	evtimer_add(&tty->timer, &tv);
 }
 
@@ -226,20 +232,38 @@ tty_block_maybe(struct tty *tty)
 	else if (tty->flags & TTY_NOBLOCK)
 		return (0);
 
-	if (size < TTY_BLOCK_START(tty))
+	/*
+	 * If a block was entered with a redraw pending, preserve that prefix
+	 * until it has been written and then discard the stale output after it.
+	 */
+	if (tty->flags & TTY_BLOCK) {
+		if (c->redraw != 0)
+			return (0);
+		if (size != 0) {
+			evbuffer_drain(tty->out, size);
+			c->discarded += size;
+		}
+		return (1);
+	}
+
+	/* Only output queued after the redraw counts towards the limit. */
+	if (size <= c->redraw ||
+	    size - c->redraw < TTY_BLOCK_START(tty))
 		return (0);
 
-	if (tty->flags & TTY_BLOCK)
-		return (1);
 	tty->flags |= TTY_BLOCK;
-
-	log_debug("%s: can't keep up, %zu discarded", c->name, size);
-
-	evbuffer_drain(tty->out, size);
-	c->discarded += size;
-
 	tty->discarded = 0;
 	evtimer_add(&tty->timer, &tv);
+
+	if (c->redraw != 0) {
+		log_debug("%s: can't keep up, preserving %zu byte redraw",
+		    c->name, c->redraw);
+		return (0);
+	}
+
+	log_debug("%s: can't keep up, %zu discarded", c->name, size);
+	evbuffer_drain(tty->out, size);
+	c->discarded += size;
 	return (1);
 }
 
@@ -251,19 +275,29 @@ tty_write_callback(__unused int fd, __unused short events, void *data)
 	size_t		 size = EVBUFFER_LENGTH(tty->out);
 	int		 nwrite;
 
-	nwrite = evbuffer_write(tty->out, c->fd);
+	if (tty_block_maybe(tty))
+		return;
+
+	size = EVBUFFER_LENGTH(tty->out);
+	if ((tty->flags & TTY_BLOCK) && c->redraw != 0) {
+		nwrite = evbuffer_write_atmost(tty->out, c->fd,
+		    (ev_ssize_t)c->redraw);
+	} else
+		nwrite = evbuffer_write(tty->out, c->fd);
 	if (nwrite == -1)
 		return;
 	log_debug("%s: wrote %d bytes (of %zu)", c->name, nwrite, size);
 
-	if (c->redraw > 0) {
+	if (c->redraw != 0) {
 		if ((size_t)nwrite >= c->redraw)
 			c->redraw = 0;
 		else
 			c->redraw -= nwrite;
 		log_debug("%s: waiting for redraw, %zu bytes left", c->name,
 		    c->redraw);
-	} else if (tty_block_maybe(tty))
+	}
+
+	if (tty_block_maybe(tty))
 		return;
 
 	if (EVBUFFER_LENGTH(tty->out) != 0)

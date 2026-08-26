@@ -2383,11 +2383,8 @@ server_client_check_redraw(struct client *c)
 	 * end up back here.
 	 */
 	n = EVBUFFER_LENGTH(tty->out);
-	if (n != 0 || (tty->flags & TTY_BLOCK)) {
-		if (n != 0)
-			log_debug("%s: redraw deferred (%zu left)", c->name, n);
-		else
-			log_debug("%s: redraw deferred (blocked)", c->name);
+	if (n != 0) {
+		log_debug("%s: redraw deferred (%zu left)", c->name, n);
 		if (!evtimer_initialized(&ev))
 			evtimer_set(&ev, server_client_redraw_timer, NULL);
 		if (!evtimer_pending(&ev, NULL)) {
