@@ -800,7 +800,7 @@ layout_cell_separator_owner(struct layout_cell *lc)
 	if (type != LAYOUT_LEFTRIGHT && type != LAYOUT_TOPBOTTOM)
 		return (NULL);
 
-	lcnext = layout_cell_get_neighbour_direction(lc, 1);
+	lcnext = layout_cell_get_neighbour_dir(lc, 1);
 	if (lcnext == NULL)
 		return (NULL);
 
@@ -824,7 +824,7 @@ layout_cell_find_separator(struct layout_cell *lc, enum layout_type type,
 
 	while (lc->parent != NULL) {
 		if (lc->parent->type == type) {
-			lcother = layout_cell_get_neighbour_direction(lc,
+			lcother = layout_cell_get_neighbour_dir(lc,
 			    !before);
 			if (lcother != NULL)
 				return (before ? lcother : lc);
