@@ -1033,10 +1033,8 @@ screen_write_sync_callback(__unused int fd, __unused short events, void *arg)
 	log_debug("%s: %%%u sync timer expired", __func__, wp->id);
 	evtimer_del(&wp->sync_timer);
 
-	if (wp->base.mode & MODE_SYNC) {
-		wp->base.mode &= ~MODE_SYNC;
-		screen_write_sync_flush_dirty(wp);
-	}
+	if (wp->base.mode & MODE_SYNC)
+		screen_write_stop_sync(wp);
 }
 
 /* Start sync mode. */
@@ -1049,6 +1047,7 @@ screen_write_start_sync(struct window_pane *wp)
 		return;
 
 	wp->base.mode |= MODE_SYNC;
+	window_pane_resize_sync_capture(wp);
 	if (!event_initialized(&wp->sync_timer))
 		evtimer_set(&wp->sync_timer, screen_write_sync_callback, wp);
 	evtimer_add(&wp->sync_timer, &tv);
@@ -1068,6 +1067,7 @@ screen_write_stop_sync(struct window_pane *wp)
 	wp->base.mode &= ~MODE_SYNC;
 
 	screen_write_sync_flush_dirty(wp);
+	window_pane_resize_sync_stop(wp);
 
 	log_debug("%s: %%%u stopped sync mode", __func__, wp->id);
 }
