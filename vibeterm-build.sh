@@ -9,13 +9,25 @@
 # crash-reports 2026-09-24). A build without it keeps every pane in the
 # server's own cgroup.
 #
-# Extra arguments go to ./configure. The binary is replaced by a new inode,
-# so a server already running from it keeps its old code until it restarts.
+# Always a clean build: configure changes the -D flags in the Makefile, and
+# automake's dependency tracking does not rebuild objects for that. Reusing a
+# tree configured without systemd links libsystemd through compat/systemd.o
+# while spawn.o still has the pane-scope call compiled out, so the check below
+# looks at spawn.o, not only at what the binary links.
+#
+# Extra arguments go to ./configure. The linker unlinks ./tmux before writing
+# the new one, so a server already running from it keeps its old code until it
+# restarts.
 set -eu
 cd "$(dirname "$0")"
 [ -x configure ] || sh autogen.sh
 ./configure --enable-systemd "$@"
+make clean
 make -j"$(nproc)"
+if ! nm -u spawn.o | grep -q systemd_move_to_new_cgroup; then
+	echo "vibeterm-build: spawn.o does not move panes into scopes; per-pane scopes are compiled out" >&2
+	exit 1
+fi
 if ! ldd ./tmux | grep -q libsystemd; then
 	echo "vibeterm-build: ./tmux does not link libsystemd; per-pane scopes are compiled out" >&2
 	exit 1
