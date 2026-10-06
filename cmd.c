@@ -78,6 +78,10 @@ extern const struct cmd_entry cmd_next_layout_entry;
 extern const struct cmd_entry cmd_next_window_entry;
 extern const struct cmd_entry cmd_paste_buffer_entry;
 extern const struct cmd_entry cmd_pipe_pane_entry;
+extern const struct cmd_entry cmd_park_pane_entry;
+extern const struct cmd_entry cmd_adopt_pane_entry;
+extern const struct cmd_entry cmd_handoff_status_entry;
+extern const struct cmd_entry cmd_handoff_cancel_entry;
 extern const struct cmd_entry cmd_previous_layout_entry;
 extern const struct cmd_entry cmd_previous_window_entry;
 extern const struct cmd_entry cmd_refresh_client_entry;
@@ -172,6 +176,10 @@ const struct cmd_entry *cmd_table[] = {
 	&cmd_next_window_entry,
 	&cmd_paste_buffer_entry,
 	&cmd_pipe_pane_entry,
+	&cmd_park_pane_entry,
+	&cmd_adopt_pane_entry,
+	&cmd_handoff_status_entry,
+	&cmd_handoff_cancel_entry,
 	&cmd_previous_layout_entry,
 	&cmd_previous_window_entry,
 	&cmd_refresh_client_entry,

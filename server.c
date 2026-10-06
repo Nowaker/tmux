@@ -495,7 +495,7 @@ server_child_exited(pid_t pid, int status)
 
 	RB_FOREACH_SAFE(w, windows, &windows, w1) {
 		TAILQ_FOREACH(wp, &w->panes, entry) {
-			if (wp->pid == pid) {
+			if (wp->pid == pid && !(wp->flags & PANE_EXTERNAL)) {
 				wp->status = status;
 				wp->flags |= PANE_STATUSREADY;
 
@@ -526,7 +526,7 @@ server_child_stopped(pid_t pid, int status)
 
 	RB_FOREACH(w, windows, &windows) {
 		TAILQ_FOREACH(wp, &w->panes, entry) {
-			if (wp->pid == pid) {
+			if (wp->pid == pid && !(wp->flags & PANE_EXTERNAL)) {
 				if (killpg(pid, SIGCONT) != 0)
 					kill(pid, SIGCONT);
 			}

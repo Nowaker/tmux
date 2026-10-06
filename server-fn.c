@@ -380,6 +380,13 @@ server_destroy_pane(struct window_pane *wp, int notify)
 		wp->pipe_fd = -1;
 	}
 
+	if (wp->flags & PANE_EXTERNAL) {
+		if (options_get_number(wp->options, "remain-on-exit") == 0)
+			goto remove_pane;
+		wp->base.mode &= ~MODE_CURSOR;
+		wp->flags |= PANE_REDRAW;
+		return;
+	}
 	if (~wp->flags & PANE_STATUSREADY)
 		return;
 	remain_on_exit = options_get_number(wp->options, "remain-on-exit");
@@ -421,6 +428,7 @@ server_destroy_pane(struct window_pane *wp, int notify)
 		return;
 	}
 
+remove_pane:
 	if (notify)
 		server_fire_pane_exit("pane-exited", wp);
 

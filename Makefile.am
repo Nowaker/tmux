@@ -127,6 +127,7 @@ dist_tmux_SOURCES = \
 	cmd-parse.y \
 	cmd-paste-buffer.c \
 	cmd-pipe-pane.c \
+	cmd-handoff-pane.c \
 	cmd-queue.c \
 	cmd-refresh-client.c \
 	cmd-rename-session.c \

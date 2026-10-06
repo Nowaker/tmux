@@ -869,6 +869,11 @@ struct grid_cell {
 	u_int			link;
 };
 
+struct input_handoff {
+	uint32_t flags, cx, cy, mode;
+	struct utf8_data last;
+};
+
 /* Grid extended cell entry. */
 struct grid_extd_entry {
 	utf8_char		data;
@@ -1366,6 +1371,10 @@ struct window_pane {
 #define PANE_FLOATOVERZOOM 0x200000
 #define PANE_CLOSEONCANCEL 0x400000
 #define PANE_RESIZE_SYNC_CAPABLE 0x800000
+#define PANE_EXTERNAL 0x1000000
+#define PANE_HANDOFF 0x2000000
+#define PANE_ADOPTING 0x4000000
+#define PANE_HANDOFF_INPUTOFF 0x8000000
 
 	bitstr_t	*sync_dirty;
 	u_int		 sync_dirty_size;
@@ -3453,6 +3462,9 @@ struct input_ctx *input_init(struct window_pane *, struct bufferevent *,
 void	 input_free(struct input_ctx *);
 void	 input_reset(struct input_ctx *, int);
 struct evbuffer *input_pending(struct input_ctx *);
+int	 input_handoff_safe(struct input_ctx *);
+void	 input_handoff_save(struct input_ctx *, struct input_handoff *);
+void	 input_handoff_restore(struct input_ctx *, const struct input_handoff *);
 void	 input_parse_pane(struct window_pane *);
 void	 input_parse_buffer(struct window_pane *, const u_char *, size_t);
 void	 input_parse_screen(struct input_ctx *, struct screen *,

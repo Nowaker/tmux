@@ -953,6 +953,44 @@ input_pending(struct input_ctx *ictx)
 	return (ictx->since_ground);
 }
 
+int
+input_handoff_safe(struct input_ctx *ictx)
+{
+	return (ictx->state == &input_state_ground && !ictx->utf8started &&
+	    ictx->request_count == 0 && ictx->cell.set == 0 &&
+	    ictx->cell.g0set == 0 && ictx->cell.g1set == 0 &&
+	    ictx->cell.cell.attr == 0 && ictx->cell.cell.fg == 8 &&
+	    ictx->cell.cell.bg == 8 && ictx->cell.cell.us == 8 &&
+	    ictx->cell.cell.flags == grid_default_cell.flags &&
+	    ictx->cell.cell.link == 0 && ictx->old_cell.set == 0 &&
+	    ictx->old_cell.g0set == 0 && ictx->old_cell.g1set == 0 &&
+	    ictx->old_cell.cell.attr == 0 && ictx->old_cell.cell.fg == 8 &&
+	    ictx->old_cell.cell.bg == 8 && ictx->old_cell.cell.us == 8 &&
+	    ictx->old_cell.cell.flags == grid_default_cell.flags &&
+	    ictx->old_cell.cell.link == 0);
+}
+
+void
+input_handoff_save(struct input_ctx *ictx, struct input_handoff *state)
+{
+	state->flags = ictx->flags;
+	state->cx = ictx->old_cx;
+	state->cy = ictx->old_cy;
+	state->mode = ictx->old_mode;
+	memcpy(&state->last, &ictx->last, sizeof state->last);
+}
+
+void
+input_handoff_restore(struct input_ctx *ictx, const struct input_handoff *state)
+{
+	input_reset(ictx, 0);
+	ictx->flags = state->flags;
+	ictx->old_cx = state->cx;
+	ictx->old_cy = state->cy;
+	ictx->old_mode = state->mode;
+	memcpy(&ictx->last, &state->last, sizeof ictx->last);
+}
+
 /* Change input state. */
 static void
 input_set_state(struct input_ctx *ictx, const struct input_transition *itr)

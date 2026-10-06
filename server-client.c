@@ -1957,6 +1957,9 @@ server_client_check_pane_buffer(struct window_pane *wp)
 	u_int				 attached_clients = 0;
 	size_t				 new_size;
 
+	if (wp->flags & PANE_HANDOFF)
+		return;
+
 	/*
 	 * Work out the minimum used size. This is the most that can be removed
 	 * from the buffer.

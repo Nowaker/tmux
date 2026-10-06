@@ -6,6 +6,60 @@ screen and continue running in the background, then later reattached.
 
 This release runs on OpenBSD, FreeBSD, NetBSD, Linux, macOS and Solaris.
 
+* Fork experiment: interactive PTY handoff
+
+This fork adds explicit park-pane, adopt-pane, handoff-status and
+handoff-cancel commands. A keeper retains the original PTY master and a bounded
+1 MiB output FIFO while the old server exits. Adoption transfers that descriptor
+to an empty pane in a new server; it does not restart the application.
+
+Use only private test servers until the surrounding application's lifecycle
+supports migration. For an 80x24 pane, with absolute binary and private paths:
+
+	$ mkdir -m 700 /path/to/private/handoff
+	$ tmux -S /path/to/private/old park-pane -t %0 /path/to/private/handoff
+	$ tmux -S /path/to/private/old kill-server
+	$ tmux -S /path/to/private/new new-session -d -s resumed -x 80 -y 24
+	$ tmux -S /path/to/private/new new-window -k -t resumed:0 -P -F '#{pane_id}' ''
+	$ tmux -S /path/to/private/new adopt-pane -t %0 /path/to/private/handoff
+
+Use the pane ID printed by new-window, not the illustrative %0, and preserve
+the original pane dimensions. new-session with an empty command is not an empty
+adoption target. handoff-status reports keeper state; handoff-cancel closes a
+parked PTY and may terminate its application. It is not a harmless cleanup.
+
+Parking requires a supported parser checkpoint. Partial UTF-8/escape sequences,
+synchronized updates, nondefault attributes/charsets/hyperlinks, custom tabs,
+palette or scroll margins, pending replies and active pane modes/queues are
+refused. The active viewport and supported cursor/parser state are restored;
+normal-screen history beneath an alternate screen is not restored. Inherited
+TMUX/TMUX_PANE variables remain stale, so this is not transparent Vibeterm
+process migration. An adopted process is not the new server's child: EOF marks
+it dead with unknown (empty) exit status.
+
+Commit acknowledgement ambiguity leaves the descriptor suspended, never with
+two active readers; repeat the same command to resolve keeper ownership. The
+private directory must belong to the current user with mode 0700. This is a
+same-user mechanism, not protection from another process owned by that user.
+PID-only server restart is tested on macOS. Supervisor control-group shutdown
+requires separate Linux cgroup validation and is not implied by those tests.
+
+The same PID-only regression also passes on Linux with systemd disabled. The
+keeper is forked without exec and retains the server's inherited address space;
+the 1 MiB FIFO bound is not a bound on total keeper memory. After adoption it
+retains the receipt endpoint until handoff-cancel, which then removes only the
+receipt and does not close the already transferred PTY. Unresolved handoffs
+refuse pane/window respawn until ownership is positively recovered.
+
+Run the isolated end-to-end regression from this checkout:
+
+	$ python3 -B -m regress.handoff ./tmux
+
+It checks actual server replacement with unchanged application PID/TTY and job
+control, viewport/input continuity, lost commit acknowledgements, fragment
+boundaries, cancellation, EOF and exact 2 MiB output parity. It never connects
+to the default server.
+
 * Dependencies
 
 tmux depends on libevent 2.x, available from:
