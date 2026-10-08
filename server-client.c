@@ -40,7 +40,7 @@ static void	server_client_repeat_timer(int, short, void *);
 static void	server_client_click_timer(int, short, void *);
 static void	server_client_check_exit(struct client *, int);
 static void	server_client_exit_timer(int, short, void *);
-static void	server_client_check_redraw(struct client *);
+static int	server_client_check_redraw(struct client *);
 static void	server_client_check_modes(struct client *);
 static void	server_client_set_title(struct client *);
 static void	server_client_set_path(struct client *);
@@ -1753,6 +1753,7 @@ server_client_loop(void)
 	struct window			*w;
 	struct window_pane		*wp;
 	struct window_mode_entry	*wme;
+	int			 redrawn;
 
 	/* Check for window resize. This is done before redrawing. */
 	RB_FOREACH(w, windows, &windows)
@@ -1779,8 +1780,14 @@ server_client_loop(void)
 		server_client_check_exit(c, 0);
 		if (c->session != NULL && c->session->curw != NULL) {
 			server_client_check_modes(c);
-			server_client_check_redraw(c);
+			redrawn = server_client_check_redraw(c);
 			server_client_reset_state(c);
+			if (redrawn) {
+				/* Protect the reset controls and sync end too. */
+				c->redraw = EVBUFFER_LENGTH(c->tty.out);
+				log_debug("%s: redraw added %zu bytes", c->name,
+				    c->redraw);
+			}
 		}
 	}
 
@@ -2414,7 +2421,7 @@ server_client_any_pane_redraw(struct client *c)
 }
 
 /* Check for client redraws. */
-static void
+static int
 server_client_check_redraw(struct client *c)
 {
 	struct session		*s = c->session;
@@ -2427,7 +2434,7 @@ server_client_check_redraw(struct client *c)
 	size_t			 n;
 
 	if (c->flags & (CLIENT_CONTROL|CLIENT_SUSPENDED))
-		return;
+		return (0);
 	if (c->flags & CLIENT_ALLREDRAWFLAGS) {
 		log_debug("%s: redraw%s%s%s%s", c->name,
 		    (c->flags & CLIENT_REDRAWWINDOW) ? " window" : "",
@@ -2444,11 +2451,11 @@ server_client_check_redraw(struct client *c)
 		needed = 1;
 	if (!needed) {
 		c->flags &= ~CLIENT_STATUSFORCE;
-		return;
+		return (0);
 	}
 	if (!window_resize_sync_redraw_ready(w)) {
 		log_debug("%s: redraw deferred for resize sync", c->name);
-		return;
+		return (0);
 	}
 
 	/*
@@ -2473,11 +2480,11 @@ server_client_check_redraw(struct client *c)
 			if (wp->flags & PANE_REDRAWSCROLLBAR)
 				c->flags |= CLIENT_REDRAWSCROLLBARS;
 		}
-		return;
+		return (0);
 	}
 	if (!window_resize_sync_commit(w)) {
 		log_debug("%s: commit deferred for resize sync", c->name);
-		return;
+		return (0);
 	}
 
 	/* Unfreeze the tty and turn off the cursor. */
@@ -2522,14 +2529,10 @@ server_client_check_redraw(struct client *c)
 	tty_update_mode(tty, mode, NULL);
 	tty->flags = (tty->flags & ~(TTY_BLOCK|TTY_FREEZE|TTY_NOCURSOR))|tflags;
 
-	/*
-	 * All the redraw flags can now be cleared. Also record how many bytes
-	 * were written.
-	 */
+	/* All the redraw flags can now be cleared. */
 	c->flags &= ~(CLIENT_ALLREDRAWFLAGS|CLIENT_REDRAWSCROLLBARS|
 	    CLIENT_STATUSFORCE);
-	c->redraw = EVBUFFER_LENGTH(tty->out);
-	log_debug("%s: redraw added %zu bytes", c->name, c->redraw);
+	return (1);
 }
 
 /* Set client title. */

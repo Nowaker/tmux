@@ -22,6 +22,7 @@ export PATH TERM LC_ALL
 
 python3 - "$TEST_TMUX" <<'PY'
 import os
+import re
 import select
 import signal
 import subprocess
@@ -40,6 +41,7 @@ BACKLOG_TIMEOUT = 0.5
 RUN_SECONDS = 8
 SLOW_BYTES = 512
 SLOW_INTERVAL = 0.05
+MAX_SYNC_SECONDS = 6
 
 EMITTER = """\
 import os
@@ -133,7 +135,7 @@ with tempfile.TemporaryDirectory() as directory:
         "blocked", "python3 -u %s %s %s" % (emitter, start, marker))
     run("set-option", "-g", "status", "off")
     run("set-option", "-g", "window-size", "manual")
-    run("set-option", "-as", "terminal-features", "*:RGB")
+    run("set-option", "-as", "terminal-features", "*:RGB:sync")
 
     pid, fd = attach()
     try:
@@ -154,9 +156,29 @@ with tempfile.TemporaryDirectory() as directory:
         overrun = False
         seen = False
         window = b""
+        sync_buffer = b""
+        sync_opened = None
+        sync_ends = 0
+        longest_sync = 0
         end = time.time() + RUN_SECONDS
         while time.time() < end:
             chunk = read_ready(fd, SLOW_BYTES)
+            now = time.time()
+            sync_buffer += chunk
+            matches = list(re.finditer(rb"\x1b\[\?2026([hl])", sync_buffer))
+            for match in matches:
+                if match.group(1) == b"h" and sync_opened is None:
+                    sync_opened = now
+                elif match.group(1) == b"l":
+                    sync_ends += 1
+                    if sync_opened is not None:
+                        longest_sync = max(longest_sync, now - sync_opened)
+                    sync_opened = None
+            if matches:
+                sync_buffer = sync_buffer[matches[-1].end():]
+            sync_buffer = sync_buffer[-6:]
+            if sync_opened is not None:
+                longest_sync = max(longest_sync, now - sync_opened)
             time.sleep(SLOW_INTERVAL)
             consumed += len(chunk)
             current_written, current_discarded = counters()
@@ -181,6 +203,10 @@ with tempfile.TemporaryDirectory() as directory:
                 if b"MARKER" in window:
                     seen = True
 
+        if longest_sync > MAX_SYNC_SECONDS or sync_ends == 0:
+            raise RuntimeError("slow redraw did not deliver synchronized "
+                "update endings: %d endings, longest open %.2f seconds" %
+                (sync_ends, longest_sync))
         if not overrun:
             raise RuntimeError("the terminal was never overrun, so no flow "
                 "control was exercised: peak backlog %d bytes" % peak)
