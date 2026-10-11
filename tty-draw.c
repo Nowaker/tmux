@@ -114,10 +114,27 @@ tty_draw_line_get_empty(const struct grid_cell *gc,
 	return (empty);
 }
 
-/* Draw a line from screen to tty. */
-void
-tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
-    u_int atx, u_int aty, const struct tty_style_ctx *style_ctx)
+static int
+tty_draw_line_vs16(const struct grid_cell *gc)
+{
+	struct utf8_data	 ud;
+	enum utf8_state	 state;
+	u_int		 i;
+
+	if (gc->data.width != 2 || gc->data.size < 4)
+		return (0);
+	state = utf8_open(&ud, gc->data.data[0]);
+	for (i = 1; state == UTF8_MORE && i < gc->data.size; i++)
+		state = utf8_append(&ud, gc->data.data[i]);
+	return (state == UTF8_DONE && ud.width == 1 &&
+	    gc->data.size >= ud.size + 3 &&
+	    memcmp(gc->data.data + ud.size, "\357\270\217", 3) == 0);
+}
+
+static void
+tty_draw_line_internal(struct tty *tty, struct screen *s, u_int px, u_int py,
+    u_int nx, u_int atx, u_int aty, const struct tty_style_ctx *style_ctx,
+    int is_status)
 {
 	struct grid		*gd = s->grid;
 	const struct grid_cell	*gcp;
@@ -125,7 +142,7 @@ tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
 	struct grid_line	*gl;
 	u_int			 i, j, last_i, cx, ex, width;
 	u_int			 cellsize, bg;
-	int			 flags, empty, wrapped = 0;
+	int			 flags, empty, resync, wrapped = 0;
 	char			 buf[1000];
 	size_t			 len;
 	enum tty_draw_line_state current_state, next_state;
@@ -218,7 +235,7 @@ tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
 	}
 
 	/* Did the previous line wrap on to this one? */
-	if (py != 0 &&
+	if (!is_status && py != 0 &&
 	    atx == 0 &&
 	    tty->cx >= tty->sx &&
 	    tty->cy != UINT_MAX &&
@@ -235,6 +252,7 @@ tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
 	width = 0;
 	current_state = TTY_DRAW_LINE_FIRST;
 	for (;;) {
+		resync = 0;
 		/* Work out the next state. */
 		if (i == nx) {
 			/*
@@ -277,6 +295,8 @@ tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
 			}
 
 			/* Work out the next state. */
+			if (is_status && empty == 0)
+				resync = tty_draw_line_vs16(gcp);
 			if (empty != 0)
 				next_state = TTY_DRAW_LINE_EMPTY;
 			else if (current_state == TTY_DRAW_LINE_FIRST)
@@ -299,13 +319,13 @@ tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
 		}
 
 		/* If the state has changed, flush any collected data. */
-		if (next_state != current_state) {
+		if (resync || next_state != current_state) {
 			if (current_state == TTY_DRAW_LINE_EMPTY) {
 				tty_attributes(tty, &last, style_ctx);
 				tty_draw_line_clear(tty, atx + last_i, aty,
 				    i - last_i, defaults, last.bg, wrapped);
 				wrapped = 0;
-			} else if (next_state != TTY_DRAW_LINE_SAME &&
+			} else if ((resync || next_state != TTY_DRAW_LINE_SAME) &&
 			    len != 0) {
 				tty_attributes(tty, &last, style_ctx);
 				if (atx + i - width != 0 || !wrapped)
@@ -324,7 +344,20 @@ tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
 		}
 
 		/* Append the cell if it is not empty and not padding. */
-		if (next_state != TTY_DRAW_LINE_EMPTY) {
+		if (resync) {
+			tty_attributes(tty, gcp, style_ctx);
+			tty_draw_line_clear(tty, atx + i, aty, gcp->data.width,
+			    defaults, gcp->bg, 0);
+			tty_cursor(tty, atx + i, aty);
+			tty_putn(tty, gcp->data.data, gcp->data.size,
+			    gcp->data.width);
+			/* Some terminals advance one cell for a VS16-wide glyph. */
+			tty->cx = UINT_MAX;
+			if (atx + i + gcp->data.width < tty->sx)
+				tty_cursor(tty, atx + i + gcp->data.width, aty);
+			else
+				tty->cy = UINT_MAX;
+		} else if (next_state != TTY_DRAW_LINE_EMPTY) {
 			memcpy(buf + len, gcp->data.data, gcp->data.size);
 			len += gcp->data.size;
 			width += gcp->data.width;
@@ -346,4 +379,18 @@ tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
 out:
 	tty->flags = (tty->flags & ~TTY_NOCURSOR)|flags;
 	tty_update_mode(tty, tty->mode, s);
+}
+
+void
+tty_draw_line(struct tty *tty, struct screen *s, u_int px, u_int py, u_int nx,
+    u_int atx, u_int aty, const struct tty_style_ctx *style_ctx)
+{
+	tty_draw_line_internal(tty, s, px, py, nx, atx, aty, style_ctx, 0);
+}
+
+void
+tty_draw_status_line(struct tty *tty, struct screen *s, u_int px, u_int py,
+    u_int nx, u_int atx, u_int aty)
+{
+	tty_draw_line_internal(tty, s, px, py, nx, atx, aty, NULL, 1);
 }

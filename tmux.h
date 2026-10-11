@@ -2952,6 +2952,8 @@ struct environ *environ_for_session(struct session *, int);
 /* tty-draw.c */
 void	tty_draw_line(struct tty *, struct screen *, u_int, u_int, u_int,
 	    u_int, u_int, const struct tty_style_ctx *);
+void	tty_draw_status_line(struct tty *, struct screen *, u_int, u_int,
+	    u_int, u_int, u_int);
 
 /* tty.c */
 void	tty_create_log(void);

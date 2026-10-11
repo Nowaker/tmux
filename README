@@ -6,6 +6,18 @@ screen and continue running in the background, then later reattached.
 
 This release runs on OpenBSD, FreeBSD, NetBSD, Linux, macOS and Solaris.
 
+* Fork fix: status-row VS16 cursor geometry
+
+Status rows explicitly resynchronize the cursor after a narrow base character
+is widened by emoji variation selector U+FE0F. Terminal.app advances one cell
+for gear and hammer-and-wrench emoji while the status grid allocates two;
+without correction, following text overlaps the glyph and shifts left.
+
+The status-only draw path clears the two-cell footprint before drawing and
+keeps subsequent text at the grid's logical coordinate. Ordinary text and
+pane wrapping retain their existing path. This does not change the server's
+variation-selector-always-wide setting or fix VS16 advance inside pane content.
+
 * Fork experiment: interactive PTY handoff
 
 This fork adds explicit park-pane, adopt-pane, handoff-status and

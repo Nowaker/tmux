@@ -1796,7 +1796,7 @@ redraw_draw(struct client *c, struct window_pane *wp, int flags)
 			y = c->tty.sy - lines;
 		sl = c->status.active;
 		for (i = 0; i < lines; i++)
-			tty_draw_line(tty, sl, 0, i, tty->sx, 0, y + i, NULL);
+			tty_draw_status_line(tty, sl, 0, i, tty->sx, 0, y + i);
 	}
 
 	tty_reset(tty);
