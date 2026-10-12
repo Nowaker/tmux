@@ -909,6 +909,11 @@ window_get_active_at(struct window *w, u_int x, u_int y)
 			continue;
 		window_pane_full_size_offset(wp, &xoff, &yoff, &sx, &sy);
 		if (!window_pane_is_floating(wp)) {
+			if ((x == xoff + sx &&
+			    layout_pane_separator_collapsed(wp, LAYOUT_LEFTRIGHT, 0)) ||
+			    (y == yoff + sy &&
+			    layout_pane_separator_collapsed(wp, LAYOUT_TOPBOTTOM, 0)))
+				continue;
 			/*
 			 * Tiled - to and including the right border, excluding
 			 * the bottom border.
@@ -2302,13 +2307,15 @@ window_pane_find_up(struct window_pane *wp)
 	}
 
 	left = xoff;
-	right = xoff + (int)sx;
+	right = xoff + (int)sx -
+	    layout_pane_separator_collapsed(wp, LAYOUT_LEFTRIGHT, 0);
 
 	TAILQ_FOREACH(next, &w->panes, entry) {
 		window_pane_full_size_offset(next, &xoff, &yoff, &sx, &sy);
 		if (next == wp)
 			continue;
-		if (yoff + (int)sy + 1 != edge)
+		if (yoff + (int)sy +
+		    !layout_pane_separator_collapsed(wp, LAYOUT_TOPBOTTOM, 1) != edge)
 			continue;
 		end = xoff + (int)sx - 1;
 
@@ -2350,7 +2357,8 @@ window_pane_find_down(struct window_pane *wp)
 
 	window_pane_full_size_offset(wp, &xoff, &yoff, &sx, &sy);
 
-	edge = yoff + (int)sy + 1;
+	edge = yoff + (int)sy +
+	    !layout_pane_separator_collapsed(wp, LAYOUT_TOPBOTTOM, 0);
 	if (status == PANE_STATUS_TOP) {
 		if (edge >= (int)w->sy)
 			edge = 1;
@@ -2363,7 +2371,8 @@ window_pane_find_down(struct window_pane *wp)
 	}
 
 	left = wp->xoff;
-	right = wp->xoff + (int)wp->sx;
+	right = wp->xoff + (int)wp->sx -
+	    layout_pane_separator_collapsed(wp, LAYOUT_LEFTRIGHT, 0);
 
 	TAILQ_FOREACH(next, &w->panes, entry) {
 		window_pane_full_size_offset(next, &xoff, &yoff, &sx, &sy);
@@ -2415,13 +2424,15 @@ window_pane_find_left(struct window_pane *wp)
 		edge = (int)w->sx + 1;
 
 	top = yoff;
-	bottom = yoff + (int)sy;
+	bottom = yoff + (int)sy -
+	    layout_pane_separator_collapsed(wp, LAYOUT_TOPBOTTOM, 0);
 
 	TAILQ_FOREACH(next, &w->panes, entry) {
 		window_pane_full_size_offset(next, &xoff, &yoff, &sx, &sy);
 		if (next == wp)
 			continue;
-		if (xoff + (int)sx + 1 != edge)
+		if (xoff + (int)sx +
+		    !layout_pane_separator_collapsed(wp, LAYOUT_LEFTRIGHT, 1) != edge)
 			continue;
 		end = yoff + (int)sy - 1;
 
@@ -2462,12 +2473,14 @@ window_pane_find_right(struct window_pane *wp)
 
 	window_pane_full_size_offset(wp, &xoff, &yoff, &sx, &sy);
 
-	edge = xoff + (int)sx + 1;
+	edge = xoff + (int)sx +
+	    !layout_pane_separator_collapsed(wp, LAYOUT_LEFTRIGHT, 0);
 	if (edge >= (int)w->sx)
 		edge = 0;
 
 	top = wp->yoff;
-	bottom = wp->yoff + (int)wp->sy;
+	bottom = wp->yoff + (int)wp->sy -
+	    layout_pane_separator_collapsed(wp, LAYOUT_TOPBOTTOM, 0);
 
 	TAILQ_FOREACH(next, &w->panes, entry) {
 		window_pane_full_size_offset(next, &xoff, &yoff, &sx, &sy);

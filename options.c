@@ -1420,6 +1420,7 @@ options_push_changes(const char *name)
 	if (strcmp(name, "status") == 0 ||
 	    strcmp(name, "status-position") == 0 ||
 	    strcmp(name, "pane-border-indicators") == 0 ||
+	    strcmp(name, "pane-border-collapse") == 0 ||
 	    strcmp(name, "pane-border-lines") == 0 ||
 	    strcmp(name, "pane-border-status") == 0 ||
 	    strcmp(name, "pane-scrollbars") == 0 ||
@@ -1452,6 +1453,10 @@ options_push_changes(const char *name)
 			    "pane-scrollbars-position");
 			layout_fix_panes(w, NULL);
 		}
+	}
+	if (strcmp(name, "pane-border-collapse") == 0) {
+		RB_FOREACH(w, windows, &windows)
+			layout_fix_panes(w, NULL);
 	}
 	if (strcmp(name, "pane-scrollbars") == 0) {
 		RB_FOREACH(wp, window_pane_tree, &all_window_panes)
