@@ -3064,6 +3064,12 @@ format_cb_socket_path(__unused struct format_tree *ft)
 	return (xstrdup(socket_path));
 }
 
+static void *
+format_cb_pane_border_collapse_safe(__unused struct format_tree *ft)
+{
+	return (xstrdup("1"));
+}
+
 /* Callback for version. */
 static void *
 format_cb_version(__unused struct format_tree *ft)
@@ -3834,6 +3840,9 @@ static const struct format_table_entry format_table[] = {
 	},
 	{ "pane_bg", FORMAT_TABLE_STRING,
 	  format_cb_pane_bg
+	},
+	{ "pane_border_collapse_safe", FORMAT_TABLE_STRING,
+	  format_cb_pane_border_collapse_safe
 	},
 	{ "pane_bottom", FORMAT_TABLE_STRING,
 	  format_cb_pane_bottom

@@ -65,6 +65,10 @@ layout=$($TMUX display-message -p '#{window_layout}')
 collapse "$lower" top
 must_equal "$(geometry "$upper")" "0 1 0 80"
 must_equal "$(geometry "$lower")" "1 23 0 80"
+$TMUX select-pane -t "$lower" -U || exit 1
+must_equal "$($TMUX display-message -p '#{pane_id}')" "$upper"
+$TMUX select-pane -t "$upper" -D || exit 1
+must_equal "$($TMUX display-message -p '#{pane_id}')" "$lower"
 
 # The layout cells are unchanged, so the layout string still describes the
 # same tiling and can be parsed by a tmux without this option.
@@ -154,6 +158,10 @@ uncollapse "$lower"
 collapse "$right" left
 must_equal "$(geometry "$upper")" "0 1 0 40"
 must_equal "$(geometry "$right")" "0 1 40 40"
+$TMUX select-pane -t "$right" -L || exit 1
+must_equal "$($TMUX display-message -p '#{pane_id}')" "$upper"
+$TMUX select-pane -t "$upper" -R || exit 1
+must_equal "$($TMUX display-message -p '#{pane_id}')" "$right"
 uncollapse "$right"
 
 collapse "$upper" right
@@ -164,6 +172,30 @@ uncollapse "$upper"
 must_equal "$(geometry "$upper")" "0 1 0 40"
 must_equal "$(geometry "$right")" "0 1 41 39"
 must_equal "$(geometry "$lower")" "2 22 0 80"
+
+top_left=$($TMUX new-window -P -F '#{pane_id}') || exit 1
+bottom_left=$($TMUX split-window -v -t "$top_left" -P -F '#{pane_id}') || exit 1
+top_right=$($TMUX split-window -h -t "$top_left" -P -F '#{pane_id}') || exit 1
+bottom_right=$($TMUX split-window -h -t "$bottom_left" -P -F '#{pane_id}') || exit 1
+$TMUX set-option -w pane-border-collapse all || exit 1
+
+direction()
+{
+	$TMUX select-pane -t "$3" || exit 1
+	$TMUX select-pane -t "$1" || exit 1
+	$TMUX select-pane "-$2" || exit 1
+	must_equal "$($TMUX display-message -p '#{pane_id}')" "$4"
+}
+
+# Make the diagonal pane newer than the actual neighbour, including at wrap.
+direction "$bottom_left" U "$top_right" "$top_left"
+direction "$top_left" D "$bottom_right" "$bottom_left"
+direction "$bottom_right" L "$top_left" "$bottom_left"
+direction "$bottom_left" R "$top_right" "$bottom_right"
+direction "$top_left" U "$bottom_right" "$bottom_left"
+direction "$bottom_left" D "$top_right" "$top_left"
+direction "$bottom_left" L "$top_right" "$bottom_right"
+direction "$bottom_right" R "$top_left" "$bottom_left"
 
 $TMUX kill-server 2>/dev/null
 exit 0
