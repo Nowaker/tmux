@@ -1,4 +1,4 @@
-/* $OpenBSD: tty.c,v 1.482 2026/09/22 06:58:06 nicm Exp $ */
+/* $OpenBSD: tty.c,v 1.486 2026/10/12 10:39:05 nicm Exp $ */
 
 /*
  * Copyright (c) 2007 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -51,6 +51,7 @@ static void	tty_check_bg(struct tty *, struct colour_palette *,
 		    struct grid_cell *);
 static void	tty_check_us(struct tty *, struct colour_palette *,
 		    struct grid_cell *);
+static void	tty_check_ncv(struct tty *, struct grid_cell *);
 static int	tty_map_theme_colour(struct tty *, int);
 static void	tty_colours_fg(struct tty *, const struct grid_cell *);
 static void	tty_colours_bg(struct tty *, const struct grid_cell *);
@@ -67,7 +68,7 @@ static void	tty_emulate_repeat(struct tty *, enum tty_code_code,
 		    enum tty_code_code, u_int);
 static void	tty_draw_pane(struct tty *, const struct tty_ctx *, u_int);
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 static void	tty_write_one(void (*)(struct tty *, const struct tty_ctx *),
 		    struct client *, struct tty_ctx *);
 #endif
@@ -1149,7 +1150,7 @@ tty_redraw_region(struct tty *tty, const struct tty_ctx *ctx)
 	 */
 	if (tty_large_region(tty, ctx) || ctx->flags & TTY_CTX_PANE_OBSCURED) {
 		log_debug("%s: %s large region redraw", __func__, c->name);
-		ctx->redraw_cb(ctx);
+		ctx->redraw_cb(ctx, ctx->orupper, ctx->orlower - ctx->orupper + 1);
 		return;
 	}
 
@@ -1315,6 +1316,10 @@ tty_clamp_area(struct tty *tty, const struct tty_ctx *ctx, u_int px, u_int py,
 	if (*rx > nx)
 		fatalx("%s: x too big, %u > %u", __func__, *rx, nx);
 
+	/*
+	 * yoff is in window coordinates; ctx->yoff - ctx->ryoff is the number
+	 * of status lines above the window on the terminal.
+	 */
 	if (yoff >= ctx->woy && yoff + ny <= ctx->woy + ctx->wsy) {
 		/* All visible. */
 		*j = 0;
@@ -1322,19 +1327,19 @@ tty_clamp_area(struct tty *tty, const struct tty_ctx *ctx, u_int px, u_int py,
 		*ry = ny;
 	} else if (yoff < ctx->woy && yoff + ny > ctx->woy + ctx->wsy) {
 		/* Both top and bottom not visible. */
-		*j = ctx->woy;
-		*y = 0;
+		*j = ctx->woy - yoff;
+		*y = ctx->yoff - ctx->ryoff;
 		*ry = ctx->wsy;
 	} else if (yoff < ctx->woy) {
 		/* Top not visible. */
-		*j = ctx->woy - (ctx->yoff + py);
-		*y = 0;
+		*j = ctx->woy - yoff;
+		*y = ctx->yoff - ctx->ryoff;
 		*ry = ny - *j;
 	} else {
 		/* Bottom not visible. */
 		*j = 0;
 		*y = (ctx->yoff + py) - ctx->woy;
-		*ry = ctx->wsy - *y;
+		*ry = ctx->woy + ctx->wsy - yoff;
 	}
 	if (*ry > ny)
 		fatalx("%s: y too big, %u > %u", __func__, *ry, ny);
@@ -1489,7 +1494,7 @@ tty_check_codeset(struct tty *tty, const struct grid_cell *gc)
 	return (&new);
 }
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 /* Update context for client. */
 static int
 tty_set_client_cb(struct tty_ctx *ttyctx, struct client *c)
@@ -1551,6 +1556,7 @@ tty_sync_start(struct tty *tty)
 	if (tty->flags & TTY_SYNCING)
 		return;
 	tty->flags |= TTY_SYNCING;
+	tty->sync_offset = EVBUFFER_LENGTH(tty->out);
 
 	if (tty_term_has(tty->term, TTYC_SYNC)) {
 		log_debug("%s sync start", tty->client->name);
@@ -1616,7 +1622,7 @@ tty_write(void (*cmdfn)(struct tty *, const struct tty_ctx *),
 	}
 }
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 /* Only write to the incoming tty instead of every client. */
 static void
 tty_write_one(void (*cmdfn)(struct tty *, const struct tty_ctx *),
@@ -1957,7 +1963,7 @@ tty_cmd_alignmenttest(struct tty *tty, const struct tty_ctx *ctx)
 	u_int		 i, j;
 
 	if (ctx->flags & TTY_CTX_WINDOW_BIGGER) {
-		ctx->redraw_cb(ctx);
+		ctx->redraw_cb(ctx, 0, ctx->sy);
 		return;
 	}
 
@@ -2016,7 +2022,7 @@ tty_cmd_cells(struct tty *tty, const struct tty_ctx *ctx)
 		    tty->cy == tty->rlower)
 			tty_draw_pane(tty, ctx, ctx->ocy);
 		else
-			ctx->redraw_cb(ctx);
+			ctx->redraw_cb(ctx, ctx->ocy, 1);
 		return;
 	}
 
@@ -2062,7 +2068,7 @@ tty_cmd_rawstring(struct tty *tty, const struct tty_ctx *ctx)
 	tty_invalidate(tty);
 }
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 void
 tty_cmd_sixelimage(struct tty *tty, const struct tty_ctx *ctx)
 {
@@ -2503,6 +2509,33 @@ tty_dim_default_colour(struct tty *tty, int c, int foreground)
 	return (c);
 }
 
+static void
+tty_check_ncv(struct tty *tty, struct grid_cell *gc)
+{
+	int	n;
+
+	if (COLOUR_DEFAULT(gc->fg) && COLOUR_DEFAULT(gc->bg))
+		return;
+
+	n = tty_term_number(tty->term, TTYC_NCV);
+	if (n & 2)
+		gc->attr &= ~GRID_ATTR_ALL_UNDERSCORE;
+	if (n & 4)
+		gc->attr &= ~GRID_ATTR_REVERSE;
+	if (n & 8)
+		gc->attr &= ~GRID_ATTR_BLINK;
+	if (n & 16)
+		gc->attr &= ~GRID_ATTR_DIM;
+	if (n & 32)
+		gc->attr &= ~GRID_ATTR_BRIGHT;
+	if (n & 64)
+		gc->attr &= ~GRID_ATTR_HIDDEN;
+	if (n & 256)
+		gc->attr &= ~GRID_ATTR_CHARSET;
+	if (n & 32768)
+		gc->attr &= ~GRID_ATTR_ITALICS;
+}
+
 void
 tty_attributes(struct tty *tty, const struct grid_cell *gc,
     const struct tty_style_ctx *style_ctx)
@@ -2573,6 +2606,7 @@ tty_attributes(struct tty *tty, const struct grid_cell *gc,
 	tty_check_fg(tty, palette, &gc2);
 	tty_check_bg(tty, palette, &gc2);
 	tty_check_us(tty, palette, &gc2);
+	tty_check_ncv(tty, &gc2);
 
 	/*
 	 * If any bits are being cleared or the underline colour is now default,
@@ -2862,7 +2896,7 @@ tty_colours_fg(struct tty *tty, const struct grid_cell *gc)
 	 * reset because some terminals do not clear bright correctly.
 	 */
 	if (tty->cell.fg >= 90 &&
-	    tty->cell.bg <= 97 &&
+	    tty->cell.fg <= 97 &&
 	    (gc->fg < 90 || gc->fg > 97))
 		tty_reset(tty);
 

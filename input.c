@@ -1,4 +1,4 @@
-/* $OpenBSD: input.c,v 1.272 2026/09/21 10:22:31 nicm Exp $ */
+/* $OpenBSD: input.c,v 1.274 2026/10/12 17:04:48 nicm Exp $ */
 
 /*
  * Copyright (c) 2007 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -1620,7 +1620,7 @@ input_csi_dispatch(struct input_ctx *ictx)
 		case -1:
 			break;
 		case 0:
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 			input_reply(ictx, 1, "\033[?1;2;4c");
 #else
 			input_reply(ictx, 1, "\033[?1;2c");
@@ -2058,6 +2058,7 @@ static void
 input_csi_dispatch_sm_private(struct input_ctx *ictx)
 {
 	struct screen_write_ctx	*sctx = &ictx->ctx;
+	struct window_pane	*wp = ictx->wp;
 	struct grid_cell	*gc = &ictx->cell.cell;
 	u_int			 i;
 
@@ -2119,13 +2120,13 @@ input_csi_dispatch_sm_private(struct input_ctx *ictx)
 			break;
 		case 2031:
 			screen_write_mode_set(sctx, MODE_THEME_UPDATES);
-			if (ictx->wp != NULL) {
-				ictx->wp->last_theme = window_pane_get_theme(ictx->wp);
-				ictx->wp->flags &= ~PANE_THEMECHANGED;
+			if (wp != NULL) {
+				wp->last_theme = window_pane_get_theme(wp);
+				wp->flags &= ~PANE_THEMECHANGED;
 			}
 			break;
 		case 2026:
-			screen_write_start_sync(ictx->wp);
+			screen_write_start_sync(wp);
 			break;
 		default:
 			log_debug("%s: unknown '%c'", __func__, ictx->ch);
@@ -2138,7 +2139,7 @@ input_csi_dispatch_sm_private(struct input_ctx *ictx)
 static void
 input_csi_dispatch_sm_graphics(__unused struct input_ctx *ictx)
 {
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 	int	n, m, o;
 
 	if (ictx->param_list_len > 3)
@@ -2663,7 +2664,7 @@ input_dcs_dispatch(struct input_ctx *ictx)
 	const char		 prefix[] = "tmux;";
 	const u_int		 prefixlen = (sizeof prefix) - 1;
 	long long		 allow_passthrough = 0;
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 	struct window		*w;
 	struct sixel_image	*si;
 	int			 p2;
@@ -2679,7 +2680,7 @@ input_dcs_dispatch(struct input_ctx *ictx)
 		return (0);
 	}
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 	if (wp != NULL && buf[0] == 'q' && ictx->interm_len == 0) {
 		w = wp->window;
 		if (input_split(ictx) != 0)
@@ -3316,7 +3317,6 @@ input_osc_133(struct input_ctx *ictx, const char *p)
 	case 'A':
 	case 'N':
 		if (gl != NULL) {
-			memset(&gl->osc133_data, 0, sizeof gl->osc133_data);
 			gl->osc133_data.prompt_col = s->cx;
 			gl->flags |= GRID_LINE_START_PROMPT;
 		}

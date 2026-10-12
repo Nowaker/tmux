@@ -1,4 +1,4 @@
-/* $OpenBSD: tmux.h,v 1.1449 2026/09/28 10:10:16 nicm Exp $ */
+/* $OpenBSD: tmux.h,v 1.1457 2026/10/12 12:35:03 nicm Exp $ */
 
 /*
  * Copyright (c) 2007 Nicholas Marriott <nicholas.marriott@gmail.com>
@@ -69,6 +69,7 @@ struct options_array_item;
 struct options_entry;
 struct prompt;
 struct window_pane_prompt;
+struct redraw_damage;
 struct redraw_scene;
 struct redraw_span;
 struct screen_write_citem;
@@ -76,7 +77,7 @@ struct screen_write_cline;
 struct screen_write_ctx;
 struct session;
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 struct sixel_image;
 #endif
 
@@ -410,6 +411,16 @@ enum {
 	KEYC_REPORT_DARK_THEME,
 	KEYC_REPORT_LIGHT_THEME,
 
+	/* Terminal replies, handled in tty-keys.c and never fired. */
+	KEYC_REPORT_CLIPBOARD,
+	KEYC_REPORT_SYNC,
+	KEYC_REPORT_DA,
+	KEYC_REPORT_DA2,
+	KEYC_REPORT_XDA,
+	KEYC_REPORT_COLOURS,
+	KEYC_REPORT_PALETTE,
+	KEYC_REPORT_WINSZ,
+
 	/* Mouse state. */
 	KEYC_MOUSE, /* unclassified mouse event */
 	KEYC_DRAGGING, /* dragging in progress */
@@ -627,6 +638,7 @@ enum tty_code_code {
 	TTYC_KUP6,
 	TTYC_KUP7,
 	TTYC_MS,
+	TTYC_NCV,
 	TTYC_NOBR,
 	TTYC_OL,
 	TTYC_OP,
@@ -1030,7 +1042,7 @@ struct style {
 	u_int			link;
 };
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 /* Image. */
 struct image {
 	struct screen		*s;
@@ -1106,7 +1118,7 @@ struct screen {
 	bitstr_t			*tabs;
 	struct screen_sel		*sel;
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 	struct images			 images;
 	struct images			 saved_images;
 #endif
@@ -1375,6 +1387,7 @@ struct window_pane {
 #define PANE_HANDOFF 0x2000000
 #define PANE_ADOPTING 0x4000000
 #define PANE_HANDOFF_INPUTOFF 0x8000000
+#define PANE_UTMP 0x10000000
 
 	bitstr_t	*sync_dirty;
 	u_int		 sync_dirty_size;
@@ -1441,6 +1454,7 @@ struct window_pane {
 	struct screen	 base;
 
 	struct screen	 status_screen;
+	u_int		 status_generation;
 
 	TAILQ_HEAD(, window_mode_entry) modes;
 
@@ -1471,6 +1485,7 @@ struct window_pane {
 TAILQ_HEAD(window_panes, window_pane);
 TAILQ_HEAD(window_panes_zindex, window_pane);
 RB_HEAD(window_pane_tree, window_pane);
+TAILQ_HEAD(redraw_damages, redraw_damage);
 
 /* Window structure. */
 struct window {
@@ -1515,6 +1530,9 @@ struct window {
 	uint64_t		 redraw_scene_generation;
 	enum window_resize_sync_state resize_sync_state;
 	struct event		 resize_sync_timer;
+
+	struct redraw_damages	 damage;
+	u_int			 damage_count;
 
 	struct menu_data	*menu;
 	u_int			 menu_last_px;
@@ -1792,6 +1810,7 @@ struct tty_term {
 #define TERM_SIXEL 0x40
 #define TERM_INVALIDMS 0x80
 #define TERM_NOREPLACE 0x100
+#define TERM_KITTYGRAPHICS 0x200
 	int		 flags;
 
 	LIST_ENTRY(tty_term) entry;
@@ -1849,6 +1868,8 @@ struct tty {
 	struct event	 timer;
 	size_t		 discarded;
 
+	size_t		 sync_offset;
+
 	struct termios	 tio;
 
 	struct grid_cell cell;
@@ -1881,6 +1902,7 @@ struct tty {
 	u_int		 mouse_last_y;
 	u_int		 mouse_last_b;
 	int		 mouse_drag_flag;
+	int		 mouse_drag_status;
 	u_int		 mouse_drag_x;
 	u_int		 mouse_drag_y;
 	int		 mouse_scrolling_flag;
@@ -1896,7 +1918,7 @@ struct tty {
 };
 
 /* Terminal command context. */
-typedef void (*tty_ctx_redraw_cb)(const struct tty_ctx *);
+typedef void (*tty_ctx_redraw_cb)(const struct tty_ctx *, u_int, u_int);
 typedef int (*tty_ctx_set_client_cb)(struct tty_ctx *, struct client *);
 struct tty_ctx {
 	struct screen		*s;
@@ -1928,7 +1950,7 @@ struct tty_ctx {
 			size_t		 size;
 		} sel;
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 		struct image		*image;
 #endif
 	};
@@ -2100,6 +2122,7 @@ struct cmd_entry_flag {
 /* Command definition. */
 struct cmd_entry {
 	const char		*name;
+	const char		*description;
 	const char		*alias;
 
 	struct args_parse	 args;
@@ -2656,6 +2679,7 @@ extern char **cfg_files;
 extern u_int cfg_nfiles;
 extern int cfg_quiet;
 void	start_cfg(void);
+void	cfg_client_lost(struct client *);
 int	load_cfg(const char *, struct client *, struct cmdq_item *,
             struct cmd_find_state *, int, struct cmdq_item **);
 int	load_cfg_from_buffer(const void *, size_t, const char *,
@@ -3029,7 +3053,7 @@ void	tty_cmd_scrolldown(struct tty *, const struct tty_ctx *);
 void	tty_cmd_reverseindex(struct tty *, const struct tty_ctx *);
 void	tty_cmd_setselection(struct tty *, const struct tty_ctx *);
 void	tty_cmd_rawstring(struct tty *, const struct tty_ctx *);
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 void	tty_cmd_sixelimage(struct tty *, const struct tty_ctx *);
 void	tty_draw_images(struct client *, struct window_pane *);
 #endif
@@ -3563,6 +3587,8 @@ void	 grid_reader_start(struct grid_reader *, struct grid *, u_int, u_int);
 void	 grid_reader_get_cursor(struct grid_reader *, u_int *, u_int *);
 u_int	 grid_reader_line_length(struct grid_reader *);
 int	 grid_reader_in_set(struct grid_reader *, const char *);
+int	 grid_reader_output_range(struct grid_reader *, u_int *, u_int *,
+		     u_int *, u_int *);
 void	 grid_reader_cursor_right(struct grid_reader *, int, int, int);
 void	 grid_reader_cursor_left(struct grid_reader *, int);
 void	 grid_reader_cursor_down(struct grid_reader *);
@@ -3674,7 +3700,7 @@ void	 screen_write_setselection(struct screen_write_ctx *, const char *,
 	     u_char *, u_int);
 void	 screen_write_rawstring(struct screen_write_ctx *, u_char *, u_int,
 	     int);
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 void	 screen_write_sixelimage(struct screen_write_ctx *,
 	     struct sixel_image *, u_int);
 #endif
@@ -3688,13 +3714,17 @@ void	 redraw_screen(struct client *);
 void	 redraw_pane(struct client *, struct window_pane *);
 void	 redraw_pane_scrollbar(struct client *, struct window_pane *);
 void	 redraw_free_scene(struct redraw_scene *);
+int	 redraw_client_has_window(struct client *, struct window *);
 void	 redraw_invalidate_scene(struct window *);
 void	 redraw_invalidate_all_scenes(void);
+void	 redraw_damage_window(struct window *, u_int, u_int, u_int, u_int);
+void	 redraw_free_damage(struct window *);
+void	 redraw_client_damage(struct client *);
 int	 redraw_get_status_border_cell_type(struct redraw_span **, u_int);
 
 /* screen.c */
 void	 screen_init(struct screen *, u_int, u_int, u_int);
-void	 screen_reinit(struct screen *, int);
+void	 screen_reinit(struct screen *);
 void	 screen_free(struct screen *);
 void	 screen_reset_tabs(struct screen *);
 void	 screen_reset_hyperlinks(struct screen *);
@@ -3749,6 +3779,8 @@ struct window	*window_find_by_id(u_int);
 void		 window_update_activity(struct window *);
 struct window	*window_create(u_int, u_int, u_int, u_int);
 void		 window_pane_set_event(struct window_pane *);
+void		 window_pane_utmp_add(struct window_pane *);
+void		 window_pane_utmp_remove(struct window_pane *);
 void		 window_pane_wait_finish(struct window_pane *);
 struct window_pane *window_get_active_at(struct window *, u_int, u_int);
 struct window_pane *window_find_string(struct window *, const char *);
@@ -3879,6 +3911,8 @@ struct style_range *window_pane_status_get_range(struct window_pane *, u_int,
 		     u_int);
 int		 window_pane_is_floating(struct window_pane *);
 int		 window_pane_is_floating_with_hidden(struct window_pane *);
+void		 window_redraw_floating_pane(struct window_pane *, int, int,
+		     int, int);
 
 /* window-border.c */
 void		 window_set_fill_cells(struct window *);
@@ -4261,7 +4295,7 @@ struct winlink	*spawn_window(struct spawn_context *, char **);
 struct window_pane *spawn_pane(struct spawn_context *, char **);
 typedef void (*spawn_finish_edit_cb)(char *, size_t, void *);
 struct spawn_editor_state *spawn_editor(struct client *, const char *, size_t,
-		     spawn_finish_edit_cb, void *);
+		     const char *, spawn_finish_edit_cb, void *);
 void		 spawn_cancel_editor(struct spawn_editor_state *);
 pid_t		 spawn_get_editor_pid(struct spawn_editor_state *);
 void		 spawn_editor_finish(struct window_pane *);
@@ -4269,7 +4303,7 @@ void		 spawn_editor_finish(struct window_pane *);
 /* regsub.c */
 char		*regsub(const char *, const char *, const char *, int);
 
-#ifdef ENABLE_SIXEL
+#ifdef ENABLE_IMAGES
 /* image.c */
 int		 image_free_all(struct screen *);
 struct image	*image_store(struct screen *, struct sixel_image *);
