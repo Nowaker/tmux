@@ -893,6 +893,22 @@ have_event:
 				if (fwl == NULL)
 					return (KEYC_UNKNOWN);
 				m->w = fwl->window->id;
+				/* Keep status bindings, but follow windows under a drag. */
+				if (type == KEYC_TYPE_MOUSEDRAG &&
+				    c->tty.mouse_drag_flag &&
+				    c->tty.mouse_drag_status &&
+				    m->y >= (u_int)m->statusat &&
+				    m->y < m->statusat + m->statuslines) {
+					sr = status_get_range(c, m->x,
+					    m->y - m->statusat);
+					if (sr != NULL &&
+					    sr->type == STYLE_RANGE_WINDOW) {
+						fwl = winlink_find_by_index(&s->windows,
+						    sr->argument);
+						if (fwl != NULL)
+							m->w = fwl->window->id;
+					}
+				}
 
 				log_debug("mouse range: window @%u", m->w);
 				loc = KEYC_MOUSE_LOCATION_STATUS;
