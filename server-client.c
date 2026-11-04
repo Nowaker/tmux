@@ -376,6 +376,7 @@ void
 server_client_lost(struct client *c)
 {
 	struct client_file	*cf, *cf1;
+	int			 had_session;
 
 	cfg_client_lost(c);
 	c->flags |= CLIENT_DEAD;
@@ -401,6 +402,7 @@ server_client_lost(struct client *c)
 	if (c->name != NULL && (c->flags & (CLIENT_CONTROL|CLIENT_TERMINAL)))
 		events_fire_client("client-closed", c);
 
+	had_session = (c->session != NULL);
 	c->session = NULL;
 	c->last_session = NULL;
 
@@ -453,7 +455,14 @@ server_client_lost(struct client *c)
 
 	server_add_accept(0); /* may be more file descriptors now */
 
-	recalculate_sizes();
+	/*
+	 * A client with no session never counted towards any window's size (see
+	 * ignore_client_size), so losing one cannot change a size. Skipping the
+	 * recalculation matters because every command-line invocation is such a
+	 * client and recalculate_sizes walks every window against every client.
+	 */
+	if (had_session)
+		recalculate_sizes();
 	server_check_unattached();
 	server_update_socket();
 }
