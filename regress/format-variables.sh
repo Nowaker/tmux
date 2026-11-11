@@ -366,6 +366,23 @@ test_var pid "$($TMUX display-message -p '#{pid}')" -t "$TGT"
 test_var pane_start_command "cat" -t "$TGT"
 test_var pane_start_command_list "'cat'" -t "$TGT"
 
+# Native fields keep their result, including NULL, ahead of environment fallback.
+PANE=$($TMUX display-message -p -t "$TGT" '#{pane_id}')
+$TMUX set -g @pane_id user-option || exit 1
+$TMUX set-environment -g pane_id environment-option || exit 1
+$TMUX set-environment -g pane_dead_signal environment-signal || exit 1
+$TMUX set-environment -g FORMAT_LOOKUP_ENV environment-fallback || exit 1
+test_var pane_id "$PANE" -t "$TGT"
+test_var @pane_id user-option -t "$TGT"
+test_var pane_dead_signal "" -t "$TGT"
+test_var FORMAT_LOOKUP_ENV environment-fallback -t "$TGT"
+$TMUX set -g status-left format-option || exit 1
+$TMUX set -w cursor-color red || exit 1
+$TMUX set -g status-format[lookup] array-option || exit 1
+test_var status-left format-option -t "$TGT"
+test_var cursor-color red -t "$TGT"
+test_var status-format[lookup] array-option -t "$TGT"
+
 # The grouped session is reported as such.
 test_var session_grouped "1" -t "cov:"
 test_var session_group_size "2" -t "cov:"

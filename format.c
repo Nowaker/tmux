@@ -4634,6 +4634,17 @@ format_find(struct format_tree *ft, const char *key, uint64_t modifiers,
 	time_t				 t = 0;
 	struct tm			 tm;
 
+	/* Native format names cannot name options, aliases, or @ user options. */
+	fte = format_table_get(key);
+	if (fte != NULL) {
+		value = fte->cb(ft);
+		if (fte->type == FORMAT_TABLE_TIME && value != NULL)
+			t = ((struct timeval *)value)->tv_sec;
+		else
+			found = value;
+		goto found;
+	}
+
 	o = options_parse_get(global_options, key, &array_key, 0);
 	if (o == NULL && ft->wp != NULL)
 		o = options_parse_get(ft->wp->options, key, &array_key, 0);
@@ -4651,15 +4662,6 @@ format_find(struct format_tree *ft, const char *key, uint64_t modifiers,
 		goto found;
 	}
 
-	fte = format_table_get(key);
-	if (fte != NULL) {
-		value = fte->cb(ft);
-		if (fte->type == FORMAT_TABLE_TIME && value != NULL)
-			t = ((struct timeval *)value)->tv_sec;
-		else
-			found = value;
-		goto found;
-	}
 	fe_find.key = (char *)key;
 	fe = RB_FIND(format_entry_tree, &ft->tree, &fe_find);
 	if (fe != NULL) {
