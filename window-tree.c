@@ -1203,7 +1203,7 @@ window_tree_update(struct window_mode_entry *wme)
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 }
 
 static char *
@@ -1267,7 +1267,7 @@ window_tree_command_done(__unused struct cmdq_item *item, void *modedata)
 	if (!data->dead) {
 		mode_tree_build(data->data);
 		mode_tree_draw(data->data);
-		data->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(data->wp, PANE_REDRAW);
 	}
 	window_tree_destroy(data);
 	return (CMD_RETURN_NORMAL);
@@ -1562,6 +1562,6 @@ again:
 		window_pane_reset_mode(wp);
 	else {
 		mode_tree_draw(data->data);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 	}
 }

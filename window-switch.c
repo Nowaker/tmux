@@ -545,7 +545,7 @@ window_switch_key(struct window_mode_entry *wme, struct client *c,
 			    screen_size_x(&data->screen), &redraw);
 			if (redraw || result == PROMPT_KEY_HANDLED) {
 				window_switch_draw_screen(wme);
-				wp->flags |= PANE_REDRAW;
+				window_pane_set_flags(wp, PANE_REDRAW);
 			}
 			return;
 		}
@@ -602,7 +602,7 @@ window_switch_key(struct window_mode_entry *wme, struct client *c,
 		result = prompt_key(data->prompt, key, &redraw);
 		if (redraw) {
 			window_switch_draw_screen(wme);
-			wp->flags |= PANE_REDRAW;
+			window_pane_set_flags(wp, PANE_REDRAW);
 		}
 		if (result == PROMPT_KEY_HANDLED ||
 		    result == PROMPT_KEY_NOT_HANDLED)
@@ -650,5 +650,5 @@ window_switch_key(struct window_mode_entry *wme, struct client *c,
 
 moved:
 	window_switch_draw_screen(wme);
-	wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(wp, PANE_REDRAW);
 }

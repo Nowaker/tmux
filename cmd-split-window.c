@@ -233,7 +233,7 @@ cmd_split_window_exec(struct cmd *self, struct cmdq_item *item)
 		}
 		options_set_string(new_wp->options, "window-active-style", 0,
 		    "%s", style);
-		new_wp->flags |= (PANE_REDRAW|PANE_STYLECHANGED|
+		window_pane_set_flags(new_wp, PANE_REDRAW|PANE_STYLECHANGED|
 		    PANE_THEMECHANGED);
 	}
 	style = args_get(args, 'S');

@@ -162,7 +162,7 @@ window_clock_timer_callback(__unused int fd, __unused short events, void *arg)
 	if (now.tm_sec != then.tm_sec) {
 		data->tim = t;
 		window_clock_draw_screen(wme);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 	}
 
 	window_clock_start_timer(wme);

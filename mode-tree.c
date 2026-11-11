@@ -735,7 +735,7 @@ mode_tree_resize(struct mode_tree_data *mtd, u_int sx, u_int sy)
 	mode_tree_build(mtd);
 	mode_tree_draw(mtd);
 
-	mtd->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(mtd->wp, PANE_REDRAW);
 }
 
 struct mode_tree_item *
@@ -1169,7 +1169,7 @@ mode_tree_set_prompt(struct mode_tree_data *mtd, struct client *c,
 	mtd->prompt_data = mtp;
 
 	mode_tree_draw(mtd);
-	mtd->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(mtd->wp, PANE_REDRAW);
 
 	if ((flags & PROMPT_SINGLE) && (flags & PROMPT_ACCEPT) && c != NULL) {
 		mtd->references++;
@@ -1294,7 +1294,7 @@ mode_tree_search_set(struct mode_tree_data *mtd)
 	mode_tree_build(mtd);
 	mode_tree_set_current(mtd, tag);
 	mode_tree_draw(mtd);
-	mtd->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(mtd->wp, PANE_REDRAW);
 }
 
 static enum prompt_result
@@ -1338,7 +1338,7 @@ mode_tree_filter_callback(__unused struct client *c, void *data, const char *s,
 
 	mode_tree_build(mtd);
 	mode_tree_draw(mtd);
-	mtd->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(mtd->wp, PANE_REDRAW);
 
 	if (key == PROMPT_KEY_HANDLED)
 		return (PROMPT_CONTINUE);
@@ -1353,7 +1353,7 @@ mode_tree_clear_filter(struct mode_tree_data *mtd)
 
 	mode_tree_build(mtd);
 	mode_tree_draw(mtd);
-	mtd->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(mtd->wp, PANE_REDRAW);
 }
 
 static void
@@ -1561,7 +1561,7 @@ mode_tree_key(struct mode_tree_data *mtd, struct client *c, key_code *key,
 
 		if (redraw || mtd->prompt != prompt) {
 			mode_tree_draw(mtd);
-			mtd->wp->flags |= PANE_REDRAW;
+			window_pane_set_flags(mtd->wp, PANE_REDRAW);
 		}
 		if (result != PROMPT_KEY_NOT_HANDLED) {
 			*key = KEYC_NONE;

@@ -170,7 +170,7 @@ screen_write_set_client_cb(struct tty_ctx *ttyctx, struct client *c)
 		 */
 		log_debug("%s: adding %%%u to deferred redraw", __func__,
 		    wp->id);
-		wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR);
+		window_pane_set_flags(wp, PANE_REDRAW|PANE_REDRAWSCROLLBAR);
 		return (-1);
 	}
 
@@ -1473,7 +1473,7 @@ screen_write_alignmenttest(struct screen_write_ctx *ctx)
 
 #ifdef ENABLE_IMAGES
 	if (image_free_all(s) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	for (yy = 0; yy < screen_size_y(s); yy++) {
@@ -1520,7 +1520,7 @@ screen_write_insertcharacter(struct screen_write_ctx *ctx, u_int nx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	screen_write_initctx(ctx, &ttyctx, 0, 1);
@@ -1561,7 +1561,7 @@ screen_write_deletecharacter(struct screen_write_ctx *ctx, u_int nx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	screen_write_initctx(ctx, &ttyctx, 0, 1);
@@ -1602,7 +1602,7 @@ screen_write_clearcharacter(struct screen_write_ctx *ctx, u_int nx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	screen_write_initctx(ctx, &ttyctx, 0, 1);
@@ -1637,7 +1637,7 @@ screen_write_insertline(struct screen_write_ctx *ctx, u_int ny, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, sy - s->cy) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	if (s->cy < s->rupper || s->cy > s->rlower) {
@@ -1705,7 +1705,7 @@ screen_write_deleteline(struct screen_write_ctx *ctx, u_int ny, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, sy - s->cy) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	if (s->cy < s->rupper || s->cy > s->rlower) {
@@ -1778,7 +1778,7 @@ screen_write_clearline(struct screen_write_ctx *ctx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	flags = gl->flags & GRID_LINE_OSC133_FLAGS;
@@ -1817,7 +1817,7 @@ screen_write_clearendofline(struct screen_write_ctx *ctx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	grid_view_clear(s->grid, s->cx, s->cy, sx - s->cx, 1, bg);
@@ -1844,7 +1844,7 @@ screen_write_clearstartofline(struct screen_write_ctx *ctx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	if (s->cx > sx - 1)
@@ -1898,7 +1898,7 @@ screen_write_reverseindex(struct screen_write_ctx *ctx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_free_all(s) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	grid_view_scroll_region_down(s->grid, s->rupper, s->rlower, bg);
@@ -1977,7 +1977,7 @@ screen_write_linefeed(struct screen_write_ctx *ctx, int wrapped, u_int bg)
 	else
 		redraw = image_check_line(s, rupper, rlower - rupper);
 	if (redraw && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	grid_view_scroll_region_up(gd, s->rupper, s->rlower, bg);
@@ -2005,7 +2005,7 @@ screen_write_scrollup(struct screen_write_ctx *ctx, u_int lines, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_scroll_up(s, lines) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	for (i = 0; i < lines; i++) {
@@ -2034,7 +2034,7 @@ screen_write_scrolldown(struct screen_write_ctx *ctx, u_int lines, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_free_all(s) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	for (i = 0; i < lines; i++)
@@ -2075,7 +2075,7 @@ screen_write_clearendofscreen(struct screen_write_ctx *ctx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, s->cy, sy - s->cy) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	screen_write_initctx(ctx, &ttyctx, 1, 1);
@@ -2156,7 +2156,7 @@ screen_write_clearstartofscreen(struct screen_write_ctx *ctx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_line(s, 0, s->cy - 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	screen_write_initctx(ctx, &ttyctx, 1, 1);
@@ -2229,7 +2229,7 @@ screen_write_clearscreen(struct screen_write_ctx *ctx, u_int bg)
 
 #ifdef ENABLE_IMAGES
 	if (image_free_all(s) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	screen_write_initctx(ctx, &ttyctx, 1, 1);
@@ -2441,7 +2441,7 @@ screen_write_collect_flush_scrolled(struct screen_write_ctx *ctx)
 		return 0;
 	}
 	if (wp != NULL && window_pane_scrollbar_overlay_visible(wp)) {
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 		return 0;
 	}
 
@@ -2737,7 +2737,7 @@ screen_write_collect_end(struct screen_write_ctx *ctx)
 
 #ifdef ENABLE_IMAGES
 	if (image_check_area(s, s->cx, s->cy, ci->used, 1) && ctx->wp != NULL)
-		ctx->wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(ctx->wp, PANE_REDRAW);
 #endif
 
 	grid_view_set_cells(s->grid, s->cx, s->cy, &ci->gc, cl->data + ci->x,
@@ -3276,7 +3276,7 @@ screen_write_sixelimage(struct screen_write_ctx *ctx, struct sixel_image *si,
 	if (sy <= y) {
 		lines = y - sy + 1;
 		if (image_scroll_up(s, lines) && ctx->wp != NULL)
-			ctx->wp->flags |= PANE_REDRAW;
+			window_pane_set_flags(ctx->wp, PANE_REDRAW);
 		for (i = 0; i < lines; i++) {
 			grid_view_scroll_region_up(gd, 0, screen_size_y(s) - 1,
 			    bg);

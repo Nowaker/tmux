@@ -356,6 +356,7 @@ control_set_pane_on(struct client *c, struct window_pane *wp)
 		cp->flags &= ~CONTROL_PANE_OFF;
 		memcpy(&cp->offset, &wp->offset, sizeof cp->offset);
 		memcpy(&cp->queued, &wp->offset, sizeof cp->queued);
+		server_client_schedule_pane(wp);
 	}
 }
 
@@ -370,6 +371,7 @@ control_set_pane_off(struct client *c, struct window_pane *wp)
 	memcpy(&cp->offset, &wp->offset, sizeof cp->offset);
 	memcpy(&cp->queued, &wp->offset, sizeof cp->queued);
 	cp->flags |= CONTROL_PANE_OFF;
+	server_client_schedule_pane(wp);
 }
 
 /* Continue a paused pane. */
@@ -384,6 +386,7 @@ control_continue_pane(struct client *c, struct window_pane *wp)
 		memcpy(&cp->offset, &wp->offset, sizeof cp->offset);
 		memcpy(&cp->queued, &wp->offset, sizeof cp->queued);
 		control_notify_write(c, "%%continue %%%u", wp->id);
+		server_client_schedule_pane(wp);
 	}
 }
 
@@ -398,6 +401,7 @@ control_pause_pane(struct client *c, struct window_pane *wp)
 		cp->flags |= CONTROL_PANE_PAUSED;
 		control_discard_pane(c, cp);
 		control_notify_write(c, "%%pause %%%u", wp->id);
+		server_client_schedule_pane(wp);
 	}
 }
 

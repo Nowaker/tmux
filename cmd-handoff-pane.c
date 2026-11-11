@@ -700,7 +700,7 @@ cmd_handoff_exec(struct cmd *self, struct cmdq_item *item)
 		}
 		wp->flags &= ~(PANE_HANDOFF|PANE_ADOPTING|PANE_INPUTOFF);
 		bufferevent_enable(wp->event, EV_READ|EV_WRITE);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 		server_redraw_window(wp->window);
 		reply.state = H_ADOPTED;
 		reply.owner = getpid();

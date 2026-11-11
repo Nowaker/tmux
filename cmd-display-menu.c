@@ -533,7 +533,7 @@ cmd_display_popup_exec(struct cmd *self, struct cmdq_item *item)
 		}
 		options_set_string(new_wp->options, "window-active-style", 0,
 		    "%s", style);
-		new_wp->flags |= (PANE_REDRAW|PANE_STYLECHANGED|
+		window_pane_set_flags(new_wp, PANE_REDRAW|PANE_STYLECHANGED|
 		    PANE_THEMECHANGED);
 	}
 	if (border_style != NULL) {

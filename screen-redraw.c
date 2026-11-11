@@ -1172,6 +1172,7 @@ redraw_damage_window(struct window *w, u_int x, u_int y, u_int sx, u_int sy)
 	if (sx == 0 || sy == 0)
 		return;
 
+	server_client_schedule_window(w);
 	TAILQ_FOREACH(rd, &w->damage, entry) {
 		if (x > rd->x + rd->sx || rd->x > x + sx ||
 		    y > rd->y + rd->sy || rd->y > y + sy)

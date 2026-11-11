@@ -129,12 +129,14 @@ cmd_select_pane_marked_pane(struct cmd *self, struct cmdq_item *item)
 	events_fire("marked-pane-changed", ep);
 
 	if (lwp != NULL) {
-		lwp->flags |= (PANE_REDRAW|PANE_STYLECHANGED|PANE_THEMECHANGED);
+		window_pane_set_flags(lwp,
+		    PANE_REDRAW|PANE_STYLECHANGED|PANE_THEMECHANGED);
 		server_redraw_window_borders(lwp->window);
 		server_status_window(lwp->window);
 	}
 	if (mwp != NULL) {
-		mwp->flags |= (PANE_REDRAW|PANE_STYLECHANGED|PANE_THEMECHANGED);
+		window_pane_set_flags(mwp,
+		    PANE_REDRAW|PANE_STYLECHANGED|PANE_THEMECHANGED);
 		server_redraw_window_borders(mwp->window);
 		server_status_window(mwp->window);
 	}
@@ -216,7 +218,8 @@ cmd_select_pane_exec(struct cmd *self, struct cmdq_item *item)
 			return (CMD_RETURN_ERROR);
 		}
 		options_set_string(oo, "window-active-style", 0, "%s", style);
-		wp->flags |= (PANE_REDRAW|PANE_STYLECHANGED|PANE_THEMECHANGED);
+		window_pane_set_flags(wp,
+		    PANE_REDRAW|PANE_STYLECHANGED|PANE_THEMECHANGED);
 	}
 	if (args_has(args, 'g')) {
 		cmdq_print(item, "%s", options_get_string(oo, "window-style"));

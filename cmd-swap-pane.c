@@ -156,10 +156,10 @@ cmd_swap_pane_exec(struct cmd *self, struct cmdq_item *item)
 
 	src_wp->window = dst_w;
 	options_set_parent(src_wp->options, dst_w->options);
-	src_wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED);
+	window_pane_set_flags(src_wp, PANE_STYLECHANGED|PANE_THEMECHANGED);
 	dst_wp->window = src_w;
 	options_set_parent(dst_wp->options, src_w->options);
-	dst_wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED);
+	window_pane_set_flags(dst_wp, PANE_STYLECHANGED|PANE_THEMECHANGED);
 	if (src_w != dst_w) {
 		window_pane_resize_sync_attach(src_wp, &src_token);
 		window_pane_resize_sync_attach(dst_wp, &dst_token);

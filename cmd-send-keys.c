@@ -232,7 +232,8 @@ cmd_send_keys_exec(struct cmd *self, struct cmdq_item *item)
 	if (args_has(args, 'R')) {
 		colour_palette_clear(&wp->palette);
 		input_reset(wp->ictx, 1);
-		wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED|PANE_REDRAW);
+		window_pane_set_flags(wp,
+		    PANE_STYLECHANGED|PANE_THEMECHANGED|PANE_REDRAW);
 	}
 
 	if (count == 0) {

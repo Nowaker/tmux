@@ -164,7 +164,7 @@ cmd_refresh_report(struct tty *tty, const char *value)
 	bg = wp->control_bg;
 	if (tty_keys_colours(tty, split, strlen(split), &size, &fg, &bg) == 0) {
 		if (bg != wp->control_bg)
-			wp->flags |= PANE_THEMECHANGED;
+			window_pane_set_flags(wp, PANE_THEMECHANGED);
 		wp->control_fg = fg;
 	        wp->control_bg = bg;
 	}
