@@ -1818,12 +1818,15 @@ server_client_loop(void)
 	struct window_mode_entry	*wme;
 	static struct server_client_buffer_readers readers;
 
-	/* Check for window resize. This is done before redrawing. */
-	RB_FOREACH(w, windows, &windows)
-		server_client_check_window_resize(w);
-
-	/* Notify modes that pane styles may have changed. */
+	/*
+	 * Before redrawing: resize windows, notify modes that pane styles may
+	 * have changed, and notify resized panes of their new geometry. Each
+	 * step touches only its own window, so one walk does all three; the
+	 * walk itself, over every window and pane on every loop, is what
+	 * costs on a server with hundreds of panes.
+	 */
 	RB_FOREACH(w, windows, &windows) {
+		server_client_check_window_resize(w);
 		TAILQ_FOREACH(wp, &w->panes, entry) {
 			if (wp->flags & PANE_STYLECHANGED) {
 				wme = TAILQ_FIRST(&wp->modes);
@@ -1832,11 +1835,8 @@ server_client_loop(void)
 					wme->mode->style_changed(wme);
 			}
 		}
-	}
-
-	/* Notify resized panes before redrawing their new geometry. */
-	RB_FOREACH(w, windows, &windows)
 		server_client_check_window_pane_resize(w);
+	}
 
 	/* Check clients. */
 	TAILQ_FOREACH(c, &clients, entry) {
@@ -1850,7 +1850,8 @@ server_client_loop(void)
 
 	/*
 	 * Clear window redraw state after processing all clients. Deferred
-	 * redraws are preserved in client flags.
+	 * redraws are preserved in client flags. Theme updates go out in the
+	 * same walk.
 	 */
 	server_client_collect_buffer_readers(&readers);
 	RB_FOREACH(w, windows, &windows) {
@@ -1863,10 +1864,7 @@ server_client_loop(void)
 		redraw_free_damage(w);
 
 		check_window_name(w);
-	}
 
-	/* Send theme updates. */
-	RB_FOREACH(w, windows, &windows) {
 		TAILQ_FOREACH(wp, &w->panes, entry)
 			window_pane_send_theme_update(wp);
 	}
