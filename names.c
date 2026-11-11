@@ -60,13 +60,15 @@ check_window_name(struct window *w)
 	if (w->active == NULL)
 		return;
 
-	if (!options_get_number(w->options, "automatic-rename"))
+	/*
+	 * The flag first: this runs for every window on every server loop, and
+	 * the option lookup walks the options tree each time.
+	 */
+	if (~w->active->flags & PANE_CHANGED)
 		return;
 
-	if (~w->active->flags & PANE_CHANGED) {
-		log_debug("@%u active pane not changed", w->id);
+	if (!options_get_number(w->options, "automatic-rename"))
 		return;
-	}
 	log_debug("@%u active pane changed", w->id);
 
 	gettimeofday(&tv, NULL);

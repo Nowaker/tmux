@@ -33,7 +33,22 @@ static void	server_client_free(int, short, void *);
 static int	server_client_pane_resize_ready(struct window_pane *);
 static void	server_client_check_pane_resize(struct window_pane *, int);
 static void	server_client_check_window_pane_resize(struct window *);
-static void	server_client_check_pane_buffer(struct window_pane *);
+/*
+ * The attached clients the pane buffer check needs, gathered once per loop:
+ * the control clients, which each keep an offset into every pane, and whether
+ * any other client is attached. Walking every client for every pane made the
+ * check cost panes times clients on each loop iteration.
+ */
+struct server_client_buffer_readers {
+	struct client	**control;
+	u_int		  ncontrol;
+	u_int		  size;
+	int		  other;
+};
+static void	server_client_collect_buffer_readers(
+		    struct server_client_buffer_readers *);
+static void	server_client_check_pane_buffer(struct window_pane *,
+		    const struct server_client_buffer_readers *);
 static void	server_client_check_window_resize(struct window *);
 static key_code	server_client_check_mouse(struct client *, struct key_event *);
 static void	server_client_repeat_timer(int, short, void *);
@@ -1801,6 +1816,7 @@ server_client_loop(void)
 	struct window			*w;
 	struct window_pane		*wp;
 	struct window_mode_entry	*wme;
+	static struct server_client_buffer_readers readers;
 
 	/* Check for window resize. This is done before redrawing. */
 	RB_FOREACH(w, windows, &windows)
@@ -1836,10 +1852,11 @@ server_client_loop(void)
 	 * Clear window redraw state after processing all clients. Deferred
 	 * redraws are preserved in client flags.
 	 */
+	server_client_collect_buffer_readers(&readers);
 	RB_FOREACH(w, windows, &windows) {
 		TAILQ_FOREACH(wp, &w->panes, entry) {
 			if (wp->fd != -1)
-				server_client_check_pane_buffer(wp);
+				server_client_check_pane_buffer(wp, &readers);
 			wp->flags &= ~(PANE_REDRAW|PANE_REDRAWSCROLLBAR|
 			    PANE_ACTIVITY);
 		}
@@ -1995,16 +2012,41 @@ server_client_check_pane_resize(struct window_pane *wp, int force)
 	evtimer_add(&wp->resize_timer, &tv);
 }
 
+/* Gather the attached clients the pane buffer check reads from. */
+static void
+server_client_collect_buffer_readers(struct server_client_buffer_readers *r)
+{
+	struct client	*c;
+
+	r->ncontrol = 0;
+	r->other = 0;
+	TAILQ_FOREACH(c, &clients, entry) {
+		if (c->session == NULL)
+			continue;
+		if (~c->flags & CLIENT_CONTROL) {
+			r->other = 1;
+			continue;
+		}
+		if (r->ncontrol == r->size) {
+			r->size = r->size == 0 ? 4 : r->size * 2;
+			r->control = xreallocarray(r->control, r->size,
+			    sizeof *r->control);
+		}
+		r->control[r->ncontrol++] = c;
+	}
+}
+
 /* Check pane buffer size. */
 static void
-server_client_check_pane_buffer(struct window_pane *wp)
+server_client_check_pane_buffer(struct window_pane *wp,
+    const struct server_client_buffer_readers *r)
 {
 	struct evbuffer			*evb = wp->event->input;
 	size_t				 minimum;
 	struct client			*c;
 	struct window_pane_offset	*wpo;
-	int				 off = 1, flag;
-	u_int				 attached_clients = 0;
+	int				 off, flag, enabled;
+	u_int				 i;
 	size_t				 new_size;
 
 	if (wp->flags & PANE_HANDOFF)
@@ -2017,15 +2059,9 @@ server_client_check_pane_buffer(struct window_pane *wp)
 	minimum = wp->offset.used;
 	if (wp->pipe_fd != -1 && wp->pipe_offset.used < minimum)
 		minimum = wp->pipe_offset.used;
-	TAILQ_FOREACH(c, &clients, entry) {
-		if (c->session == NULL)
-			continue;
-		attached_clients++;
-
-		if (~c->flags & CLIENT_CONTROL) {
-			off = 0;
-			continue;
-		}
+	off = (r->ncontrol != 0 && !r->other);
+	for (i = 0; i < r->ncontrol; i++) {
+		c = r->control[i];
 		wpo = control_pane_offset(c, wp, &flag);
 		if (wpo == NULL) {
 			if (!flag)
@@ -2042,8 +2078,6 @@ server_client_check_pane_buffer(struct window_pane *wp)
 		if (wpo->used < minimum)
 			minimum = wpo->used;
 	}
-	if (attached_clients == 0)
-		off = 0;
 	minimum -= wp->base_offset;
 	if (minimum == 0)
 		goto out;
@@ -2062,9 +2096,8 @@ server_client_check_pane_buffer(struct window_pane *wp)
 		wp->offset.used -= wp->base_offset;
 		if (wp->pipe_fd != -1)
 			wp->pipe_offset.used -= wp->base_offset;
-		TAILQ_FOREACH(c, &clients, entry) {
-			if (c->session == NULL || (~c->flags & CLIENT_CONTROL))
-				continue;
+		for (i = 0; i < r->ncontrol; i++) {
+			c = r->control[i];
 			wpo = control_pane_offset(c, wp, &flag);
 			if (wpo != NULL && !flag)
 				wpo->used -= wp->base_offset;
@@ -2080,11 +2113,18 @@ out:
 	 * clients, all of which are control clients which are not able to
 	 * accept any more data.
 	 */
-	log_debug("%s: pane %%%u is %s", __func__, wp->id, off ? "off" : "on");
-	if (off)
+	/*
+	 * Only on a change: enabling an already enabled bufferevent re-adds its
+	 * event, and this runs for every pane on every server loop.
+	 */
+	enabled = (bufferevent_get_enabled(wp->event) & EV_READ) != 0;
+	if (off && enabled) {
+		log_debug("%s: pane %%%u is off", __func__, wp->id);
 		bufferevent_disable(wp->event, EV_READ);
-	else
+	} else if (!off && !enabled) {
+		log_debug("%s: pane %%%u is on", __func__, wp->id);
 		bufferevent_enable(wp->event, EV_READ);
+	}
 }
 
 /* Move cursor for pane prompt. */
