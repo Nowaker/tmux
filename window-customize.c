@@ -1735,7 +1735,7 @@ window_customize_set_option_callback(struct client *c, void *itemdata,
 	options_push_changes(item->name);
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 
@@ -1768,7 +1768,7 @@ window_customize_set_environment_callback(__unused struct client *c,
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 }
@@ -1878,7 +1878,7 @@ window_customize_add_option_callback(struct client *c, void *itemdata,
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	free(name);
 	free(array_key);
@@ -1949,7 +1949,7 @@ window_customize_add_environment_callback(struct client *c, void *itemdata,
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 }
@@ -2037,7 +2037,7 @@ window_customize_edit_close_cb(char *buf, size_t len, void *arg)
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(wp, PANE_REDRAW);
 
 out:
 	free(value);
@@ -2288,7 +2288,7 @@ window_customize_set_array_key_callback(struct client *c, void *itemdata,
 	options_push_changes(item->name);
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 
@@ -2413,7 +2413,7 @@ window_customize_set_command_callback(struct client *c, void *itemdata,
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 
@@ -2442,7 +2442,7 @@ window_customize_set_note_callback(__unused struct client *c, void *itemdata,
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 }
@@ -2554,7 +2554,7 @@ window_customize_add_key_callback(struct client *c, void *itemdata,
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 
@@ -2694,7 +2694,7 @@ window_customize_change_current_callback(__unused struct client *c,
 	free(name);
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 }
@@ -2714,7 +2714,7 @@ window_customize_change_tagged_callback(struct client *c, void *modedata,
 	    KEYC_NONE, 0);
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 
 	return (PROMPT_CLOSE);
 }
@@ -2923,6 +2923,6 @@ out:
 	else {
 		mode_tree_draw(data->data);
 		window_customize_draw_waiting(data);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 	}
 }

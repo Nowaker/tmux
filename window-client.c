@@ -509,7 +509,7 @@ window_client_update(struct window_mode_entry *wme)
 
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 }
 
 static void
@@ -573,6 +573,6 @@ window_client_key(struct window_mode_entry *wme, struct client *c,
 		window_pane_reset_mode(wp);
 	else {
 		mode_tree_draw(mtd);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 	}
 }

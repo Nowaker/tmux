@@ -29,6 +29,12 @@
 
 #include "tmux.h"
 
+static TAILQ_HEAD(, window) server_client_windows =
+    TAILQ_HEAD_INITIALIZER(server_client_windows);
+static struct window_panes server_client_panes =
+    TAILQ_HEAD_INITIALIZER(server_client_panes);
+static int server_client_buffers_changed;
+
 static void	server_client_free(int, short, void *);
 static int	server_client_pane_resize_ready(struct window_pane *);
 static void	server_client_check_pane_resize(struct window_pane *, int);
@@ -47,7 +53,7 @@ struct server_client_buffer_readers {
 };
 static void	server_client_collect_buffer_readers(
 		    struct server_client_buffer_readers *);
-static void	server_client_check_pane_buffer(struct window_pane *,
+static int	server_client_check_pane_buffer(struct window_pane *,
 		    const struct server_client_buffer_readers *);
 static void	server_client_check_window_resize(struct window *);
 static key_code	server_client_check_mouse(struct client *, struct key_event *);
@@ -357,6 +363,8 @@ server_client_set_session(struct client *c, struct session *s)
 	else if (s == NULL)
 		c->last_session = NULL;
 	c->session = s;
+	if (old != s)
+		server_client_buffers_changed = 1;
 	c->flags |= CLIENT_FOCUSED;
 
 	if (old != NULL && old->curw != NULL)
@@ -418,6 +426,8 @@ server_client_lost(struct client *c)
 		events_fire_client("client-closed", c);
 
 	had_session = (c->session != NULL);
+	if (had_session)
+		server_client_buffers_changed = 1;
 	c->session = NULL;
 	c->last_session = NULL;
 
@@ -1808,35 +1818,81 @@ server_client_handle_key_after(struct client *c, struct key_event *event,
 	return (server_client_handle_key0(c, event, after, next));
 }
 
+void
+server_client_schedule_window(struct window *w)
+{
+	if (!w->loop_queued) {
+		w->loop_queued = 1;
+		TAILQ_INSERT_TAIL(&server_client_windows, w, loop_entry);
+	}
+}
+
+void
+server_client_cancel_window(struct window *w)
+{
+	if (w->loop_queued) {
+		w->loop_queued = 0;
+		TAILQ_REMOVE(&server_client_windows, w, loop_entry);
+	}
+}
+
+void
+server_client_schedule_pane(struct window_pane *wp)
+{
+	if (wp->flags & PANE_DESTROYED)
+		return;
+	server_client_schedule_window(wp->window);
+	if (!wp->loop_queued) {
+		wp->loop_queued = 1;
+		TAILQ_INSERT_TAIL(&server_client_panes, wp, loop_entry);
+	}
+}
+
+void
+server_client_cancel_pane(struct window_pane *wp)
+{
+	if (wp->loop_queued) {
+		wp->loop_queued = 0;
+		TAILQ_REMOVE(&server_client_panes, wp, loop_entry);
+	}
+}
+
 /* Client functions that need to happen every loop. */
 void
 server_client_loop(void)
 {
 	struct client			*c;
-	struct window			*w;
-	struct window_pane		*wp;
+	struct window			*w, *w1;
+	struct window_pane		*wp, *wp1;
 	struct window_mode_entry	*wme;
 	static struct server_client_buffer_readers readers;
 
-	/* Check for window resize. This is done before redrawing. */
-	RB_FOREACH(w, windows, &windows)
+	/* An unattended WINDOW_RESIZE becomes runnable when it is viewed. */
+	TAILQ_FOREACH(c, &clients, entry) {
+		if (c->session != NULL && c->session->curw != NULL &&
+		    (c->session->curw->window->flags & WINDOW_RESIZE))
+			server_client_schedule_window(c->session->curw->window);
+	}
+	TAILQ_FOREACH(w, &server_client_windows, loop_entry)
 		server_client_check_window_resize(w);
 
 	/* Notify modes that pane styles may have changed. */
-	RB_FOREACH(w, windows, &windows) {
-		TAILQ_FOREACH(wp, &w->panes, entry) {
-			if (wp->flags & PANE_STYLECHANGED) {
-				wme = TAILQ_FIRST(&wp->modes);
-				if (wme != NULL &&
-				    wme->mode->style_changed != NULL)
-					wme->mode->style_changed(wme);
-			}
+	TAILQ_FOREACH(wp, &server_client_panes, loop_entry) {
+		wp->loop_style_pending = 0;
+		if (wp->flags & PANE_STYLECHANGED) {
+			wme = TAILQ_FIRST(&wp->modes);
+			if (wme != NULL && wme->mode->style_changed != NULL)
+				wme->mode->style_changed(wme);
 		}
 	}
 
 	/* Notify resized panes before redrawing their new geometry. */
-	RB_FOREACH(w, windows, &windows)
+	TAILQ_FOREACH(w, &server_client_windows, loop_entry)
 		server_client_check_window_pane_resize(w);
+	TAILQ_FOREACH(wp, &server_client_panes, loop_entry) {
+		if (wp->fd != -1 && server_client_pane_resize_ready(wp))
+			server_client_check_pane_resize(wp, 0);
+	}
 
 	/* Check clients. */
 	TAILQ_FOREACH(c, &clients, entry) {
@@ -1853,22 +1909,39 @@ server_client_loop(void)
 	 * redraws are preserved in client flags.
 	 */
 	server_client_collect_buffer_readers(&readers);
-	RB_FOREACH(w, windows, &windows) {
-		TAILQ_FOREACH(wp, &w->panes, entry) {
-			if (wp->fd != -1)
-				server_client_check_pane_buffer(wp, &readers);
-			wp->flags &= ~(PANE_REDRAW|PANE_REDRAWSCROLLBAR|
-			    PANE_ACTIVITY);
-		}
+	if (server_client_buffers_changed) {
+		server_client_buffers_changed = 0;
+		RB_FOREACH(wp, window_pane_tree, &all_window_panes)
+			server_client_schedule_pane(wp);
+	}
+	TAILQ_FOREACH(wp, &server_client_panes, loop_entry) {
+		wp->loop_buffer_pending = 0;
+		if (wp->fd != -1)
+			wp->loop_buffer_pending =
+			    server_client_check_pane_buffer(wp, &readers);
+		wp->flags &= ~(PANE_REDRAW|PANE_REDRAWSCROLLBAR|PANE_ACTIVITY);
+	}
+	TAILQ_FOREACH(w, &server_client_windows, loop_entry) {
 		redraw_free_damage(w);
 
 		check_window_name(w);
 	}
 
 	/* Send theme updates. */
-	RB_FOREACH(w, windows, &windows) {
-		TAILQ_FOREACH(wp, &w->panes, entry)
-			window_pane_send_theme_update(wp);
+	TAILQ_FOREACH_SAFE(wp, &server_client_panes, loop_entry, wp1) {
+		window_pane_send_theme_update(wp);
+		if (wp->loop_style_pending)
+			continue;
+		/* Retained input still needs its consumers to drain. */
+		if (wp->fd != -1 && (~wp->flags & PANE_HANDOFF) &&
+		    (EVBUFFER_LENGTH(wp->event->input) != 0 ||
+		    wp->loop_buffer_pending))
+			continue;
+		server_client_cancel_pane(wp);
+	}
+	TAILQ_FOREACH_SAFE(w, &server_client_windows, loop_entry, w1) {
+		if (!window_resize_sync_dirty(w))
+			server_client_cancel_window(w);
 	}
 }
 
@@ -1896,21 +1969,16 @@ server_client_check_window_pane_resize(struct window *w)
 	int			 drain, queued = 0;
 
 	drain = window_resize_sync_dirty(w);
+	if (!drain)
+		return;
 	TAILQ_FOREACH(wp, &w->panes, entry) {
 		if (wp->fd == -1)
 			continue;
-		if (!drain) {
-			if (server_client_pane_resize_ready(wp))
-				server_client_check_pane_resize(wp, 0);
-			continue;
-		}
 		if (!TAILQ_EMPTY(&wp->resize_queue))
 			server_client_check_pane_resize(wp, 1);
 		if (!TAILQ_EMPTY(&wp->resize_queue))
 			queued = 1;
 	}
-	if (!drain)
-		return;
 	if (!queued)
 		window_resize_sync_arm(w);
 }
@@ -1944,6 +2012,7 @@ server_client_resize_timer(__unused int fd, __unused short events, void *data)
 	log_debug("%s: %%%u resize timer expired", __func__, wp->id);
 	wp->resize_timer_second = 0;
 	evtimer_del(&wp->resize_timer);
+	server_client_schedule_pane(wp);
 }
 
 /* Check if pane should be resized. */
@@ -2037,7 +2106,7 @@ server_client_collect_buffer_readers(struct server_client_buffer_readers *r)
 }
 
 /* Check pane buffer size. */
-static void
+static int
 server_client_check_pane_buffer(struct window_pane *wp,
     const struct server_client_buffer_readers *r)
 {
@@ -2045,12 +2114,12 @@ server_client_check_pane_buffer(struct window_pane *wp,
 	size_t				 minimum;
 	struct client			*c;
 	struct window_pane_offset	*wpo;
-	int				 off, flag, enabled;
+	int				 off, flag, enabled, waiting = 0;
 	u_int				 i;
 	size_t				 new_size;
 
 	if (wp->flags & PANE_HANDOFF)
-		return;
+		return (0);
 
 	/*
 	 * Work out the minimum used size. This is the most that can be removed
@@ -2070,6 +2139,8 @@ server_client_check_pane_buffer(struct window_pane *wp,
 		}
 		if (!flag)
 			off = 0;
+		else
+			waiting = 1;
 
 		window_pane_get_new_data(wp, wpo, &new_size);
 		log_debug("%s: %s has %zu bytes used and %zu left for %%%u",
@@ -2125,6 +2196,7 @@ out:
 		log_debug("%s: pane %%%u is on", __func__, wp->id);
 		bufferevent_enable(wp->event, EV_READ);
 	}
+	return (off && waiting);
 }
 
 /* Move cursor for pane prompt. */
@@ -3179,6 +3251,8 @@ server_client_set_flags(struct client *c, const char *flags)
 			control_reset_offsets(c);
 	}
 	free(copy);
+	if (c->session != NULL)
+		server_client_buffers_changed = 1;
 	proc_send(c->peer, MSG_FLAGS, -1, &c->flags, sizeof c->flags);
 }
 

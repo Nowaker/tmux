@@ -870,7 +870,7 @@ window_panes_draw_screen(struct window_mode_entry *wme)
 	}
 	screen_write_stop(&ctx);
 
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 }
 
 static void

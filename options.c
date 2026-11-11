@@ -1381,7 +1381,7 @@ options_push_changes(const char *name)
 			if (w->active == NULL)
 				continue;
 			if (options_get_number(w->options, name))
-				w->active->flags |= PANE_CHANGED;
+				window_pane_set_flags(w->active, PANE_CHANGED);
 		}
 	}
 	if (strcmp(name, "cursor-colour") == 0) {
@@ -1433,11 +1433,12 @@ options_push_changes(const char *name)
 	if (strcmp(name, "window-style") == 0 ||
 	    strcmp(name, "window-active-style") == 0) {
 		RB_FOREACH(wp, window_pane_tree, &all_window_panes)
-			wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED);
+			window_pane_set_flags(wp,
+			    PANE_STYLECHANGED|PANE_THEMECHANGED);
 	}
 	if (*name == '@') {
 		RB_FOREACH(wp, window_pane_tree, &all_window_panes)
-			wp->flags |= PANE_STYLECHANGED;
+			window_pane_set_flags(wp, PANE_STYLECHANGED);
 	}
 	if (strcmp(name, "pane-colours") == 0) {
 		RB_FOREACH(wp, window_pane_tree, &all_window_panes)

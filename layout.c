@@ -499,7 +499,7 @@ layout_fix_panes(struct window *w, struct window_pane *skip)
 		    wp->sx != old_sx ||
 		    wp->sy != old_sy) {
 			if (window_pane_scrollbar_reserve(wp))
-				wp->flags |= PANE_REDRAWSCROLLBAR;
+				window_pane_set_flags(wp, PANE_REDRAWSCROLLBAR);
 			changed = 1;
 		}
 	}

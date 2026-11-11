@@ -77,7 +77,7 @@ cmd_resize_pane_exec(struct cmd *self, struct cmdq_item *item)
 			adjust = gd->hsize;
 		grid_remove_history(gd, adjust);
 		wp->base.cy += adjust;
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 		return (CMD_RETURN_NORMAL);
 	}
 

@@ -90,7 +90,7 @@ cmd_respawn_pane_exec(struct cmd *self, struct cmdq_item *item)
 		return (CMD_RETURN_ERROR);
 	}
 
-	wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(wp, PANE_REDRAW);
 	server_redraw_window_borders(wp->window);
 	server_status_window(wp->window);
 

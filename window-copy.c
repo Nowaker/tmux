@@ -3367,7 +3367,7 @@ window_copy_refresh_timer(__unused int fd, __unused short events, void *arg)
 		window_copy_do_refresh(wme, follow);
 		window_copy_redraw_screen(wme);
 		/* The timer runs outside key handling, so force a repaint. */
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 		wp->flags &= ~PANE_UNSEENCHANGES;
 	}
 
@@ -5891,7 +5891,7 @@ window_copy_redraw_lines(struct window_mode_entry *wme, u_int py, u_int ny)
 		    window_copy_cursor_offset(wme, data->cx, screen_size_x(s)),
 		    data->cy, 0);
 		screen_write_stop(&ctx);
-		wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR);
+		window_pane_set_flags(wp, PANE_REDRAW|PANE_REDRAWSCROLLBAR);
 		return;
 	}
 
@@ -7394,7 +7394,7 @@ window_copy_scroll_up(struct window_mode_entry *wme, u_int ny)
 		    window_copy_cursor_offset(wme, data->cx, screen_size_x(s)),
 		    data->cy, 0);
 		screen_write_stop(&ctx);
-		wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR);
+		window_pane_set_flags(wp, PANE_REDRAW|PANE_REDRAWSCROLLBAR);
 		return;
 	}
 
@@ -7462,7 +7462,7 @@ window_copy_scroll_down(struct window_mode_entry *wme, u_int ny)
 		    window_copy_cursor_offset(wme, data->cx, screen_size_x(s)),
 		    data->cy, 0);
 		screen_write_stop(&ctx);
-		wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR);
+		window_pane_set_flags(wp, PANE_REDRAW|PANE_REDRAWSCROLLBAR);
 		return;
 	}
 

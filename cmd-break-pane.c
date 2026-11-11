@@ -162,7 +162,7 @@ cmd_break_pane_exec(struct cmd *self, struct cmdq_item *item)
 	w = wp->window = window_create(w->sx, w->sy, w->xpixel, w->ypixel);
 	window_add_ref(w, __func__);
 	options_set_parent(wp->options, w->options);
-	wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED);
+	window_pane_set_flags(wp, PANE_STYLECHANGED|PANE_THEMECHANGED);
 	TAILQ_INSERT_HEAD(&w->panes, wp, entry);
 	TAILQ_INSERT_HEAD(&w->z_index, wp, zentry);
 	w->active = wp;
@@ -183,7 +183,7 @@ cmd_break_pane_exec(struct cmd *self, struct cmdq_item *item)
 	wl = session_attach(dst_s, w, idx, &cause); /* can't fail */
 
 	layout_init(w, wp);
-	wp->flags |= PANE_CHANGED;
+	window_pane_set_flags(wp, PANE_CHANGED);
 	colour_palette_from_option(&wp->palette, wp->options);
 
 	window_remove_ref(w, __func__);

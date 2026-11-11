@@ -514,7 +514,7 @@ cmd_join_pane_exec(struct cmd *self, struct cmdq_item *item)
 
 	src_wp->window = dst_w;
 	options_set_parent(src_wp->options, dst_w->options);
-	src_wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED);
+	window_pane_set_flags(src_wp, PANE_STYLECHANGED|PANE_THEMECHANGED);
 	if (flags & SPAWN_BEFORE) {
 		TAILQ_INSERT_BEFORE(dst_wp, src_wp, entry);
 		TAILQ_INSERT_BEFORE(dst_wp, src_wp, zentry);

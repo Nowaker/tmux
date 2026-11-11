@@ -496,6 +496,7 @@ window_destroy(struct window *w)
 	options_free(w->options);
 
 	free(w->name);
+	server_client_cancel_window(w);
 	free(w);
 }
 
@@ -762,6 +763,7 @@ window_resize_sync_prepare(struct window *w)
 	if (event_initialized(&w->resize_sync_timer))
 		evtimer_del(&w->resize_sync_timer);
 	w->resize_sync_state = WINDOW_RESIZE_SYNC_DIRTY;
+	server_client_schedule_window(w);
 	server_redraw_window(w);
 }
 
@@ -1091,7 +1093,7 @@ window_set_active_pane(struct window *w, struct window_pane *wp, int notify)
 
 	w->active = wp;
 	w->active->active_point = next_active_point++;
-	w->active->flags |= PANE_CHANGED;
+	window_pane_set_flags(w->active, PANE_CHANGED);
 
 	if (options_get_number(global_options, "focus-events")) {
 		window_pane_update_focus(lastwp);
@@ -1145,19 +1147,19 @@ window_redraw_active_switch(struct window *w, struct window_pane *wp)
 		gc1 = &wp->cached_gc;
 		gc2 = &wp->cached_active_gc;
 		if (!grid_cells_look_equal(gc1, gc2))
-			wp->flags |= PANE_REDRAW;
+			window_pane_set_flags(wp, PANE_REDRAW);
 		else if (wp->cached_dim != wp->cached_active_dim)
-			wp->flags |= PANE_REDRAW;
+			window_pane_set_flags(wp, PANE_REDRAW);
 		else {
 			c1 = window_pane_get_palette(wp, gc1->fg);
 			c2 = window_pane_get_palette(wp, gc2->fg);
 			if (c1 != c2)
-				wp->flags |= PANE_REDRAW;
+				window_pane_set_flags(wp, PANE_REDRAW);
 			else {
 				c1 = window_pane_get_palette(wp, gc1->bg);
 				c2 = window_pane_get_palette(wp, gc2->bg);
 				if (c1 != c2)
-					wp->flags |= PANE_REDRAW;
+					window_pane_set_flags(wp, PANE_REDRAW);
 			}
 		}
 		if (wp == w->active)
@@ -1167,7 +1169,7 @@ window_redraw_active_switch(struct window *w, struct window_pane *wp)
 		if (window_pane_is_floating(wp)) {
 			TAILQ_REMOVE(&w->z_index, wp, zentry);
 			TAILQ_INSERT_HEAD(&w->z_index, wp, zentry);
-			wp->flags |= PANE_REDRAW;
+			window_pane_set_flags(wp, PANE_REDRAW);
 			redraw_invalidate_scene(w);
 		}
 
@@ -1551,7 +1553,7 @@ window_lost_pane(struct window *w, struct window_pane *wp)
 		}
 		if (w->active != NULL) {
 			window_pane_stack_remove(&w->last_panes, w->active);
-			w->active->flags |= PANE_CHANGED;
+			window_pane_set_flags(w->active, PANE_CHANGED);
 			window_fire_pane_changed(w, w->active, wp);
 			window_update_focus(w);
 		}
@@ -1781,6 +1783,7 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 	wp->window = w;
 	wp->options = options_create(w->options);
 	wp->flags = PANE_STYLECHANGED;
+	wp->loop_style_pending = 1;
 	wp->cmd_status = -1;
 
 	wp->id = next_window_pane_id++;
@@ -1817,6 +1820,7 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 	if (gethostname(host, sizeof host) == 0)
 		screen_set_title(&wp->base, host, 0);
 
+	server_client_schedule_pane(wp);
 	return (wp);
 }
 
@@ -1888,17 +1892,17 @@ window_pane_scrollbar_redraw(struct window_pane *wp)
 	if (!window_pane_scrollbar_visible(wp))
 		return;
 	if (window_pane_scrollbar_overlay_visible(wp)) {
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 		return;
 	}
-	wp->flags |= PANE_REDRAWSCROLLBAR;
+	window_pane_set_flags(wp, PANE_REDRAWSCROLLBAR);
 }
 
 static void
 window_pane_scrollbar_redraw_visibility(struct window_pane *wp)
 {
 	redraw_invalidate_scene(wp->window);
-	wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(wp, PANE_REDRAW);
 	server_redraw_window(wp->window);
 }
 
@@ -1984,6 +1988,7 @@ window_pane_destroy(struct window_pane *wp)
 		event_del(&wp->sb_auto_timer);
 	window_pane_clear_resizes(wp, NULL);
 
+	server_client_cancel_pane(wp);
 	window_pane_remove_ref(wp, __func__);
 }
 
@@ -2032,6 +2037,7 @@ window_pane_read_callback(__unused struct bufferevent *bufev, void *data)
 	}
 	input_parse_pane(wp);
 	bufferevent_disable(wp->event, EV_READ);
+	server_client_schedule_pane(wp);
 }
 
 static void
@@ -2061,6 +2067,7 @@ window_pane_set_event(struct window_pane *wp)
 	wp->ictx = input_init(wp, wp->event, &wp->palette);
 
 	bufferevent_enable(wp->event, EV_READ|EV_WRITE);
+	server_client_schedule_pane(wp);
 }
 
 void
@@ -2106,6 +2113,7 @@ window_pane_resize(struct window_pane *wp, u_int sx, u_int sy)
 	r->osx = wp->sx;
 	r->osy = wp->sy;
 	TAILQ_INSERT_TAIL (&wp->resize_queue, r, entry);
+	server_client_schedule_pane(wp);
 
 	wp->sx = sx;
 	wp->sy = sy;
@@ -2171,7 +2179,7 @@ window_pane_set_mode(struct window_pane *wp, struct window_pane *swp,
 	wme->kill = args != NULL ? args_has(args, 'k') : 0;
 	wp->screen = wme->screen;
 
-	wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR|PANE_CHANGED);
+	window_pane_set_flags(wp, PANE_REDRAW|PANE_REDRAWSCROLLBAR|PANE_CHANGED);
 	layout_fix_panes(w, NULL);
 
 	server_redraw_window_borders(wp->window);
@@ -2214,7 +2222,7 @@ window_pane_reset_mode(struct window_pane *wp)
 	}
 	name = (next == NULL ? NULL : next->mode->name);
 
-	wp->flags |= (PANE_REDRAW|PANE_REDRAWSCROLLBAR|PANE_CHANGED);
+	window_pane_set_flags(wp, PANE_REDRAW|PANE_REDRAWSCROLLBAR|PANE_CHANGED);
 	layout_fix_panes(w, NULL);
 
 	server_redraw_window_borders(wp->window);
@@ -2299,7 +2307,7 @@ window_pane_set_prompt(struct window_pane *wp, struct client *c,
 
 	wp->prompt = prompt_create(&pd);
 	wp->prompt_data = wpp;
-	wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(wp, PANE_REDRAW);
 
 	prompt_incremental_start(wp->prompt);
 	window_fire_pane_prompt("pane-prompt-opened", wp, type);
@@ -2319,7 +2327,7 @@ window_pane_clear_prompt(struct window_pane *wp)
 
 		wp->prompt = NULL;
 		prompt_free(prompt);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 
 		if (~wp->flags & PANE_DESTROYED)
 			window_fire_pane_prompt("pane-prompt-closed", wp, type);
@@ -2340,7 +2348,7 @@ window_pane_update_prompt(struct window_pane *wp, const char *msg,
 {
 	if (wp->prompt != NULL) {
 		prompt_update(wp->prompt, msg, input);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 	}
 }
 
@@ -2399,7 +2407,7 @@ window_pane_prompt_key(struct window_pane *wp, struct client *c, key_code key,
 		window_pane_clear_prompt(wp);
 
 	if (redraw || wp->prompt != prompt)
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 
 	return (result);
 }
@@ -2975,6 +2983,16 @@ window_pane_update_used_data(struct window_pane *wp,
 	if (size > EVBUFFER_LENGTH(wp->event->input) - used)
 		size = EVBUFFER_LENGTH(wp->event->input) - used;
 	wpo->used += size;
+	server_client_schedule_pane(wp);
+}
+
+void
+window_pane_set_flags(struct window_pane *wp, int flags)
+{
+	wp->flags |= flags;
+	if (flags & PANE_STYLECHANGED)
+		wp->loop_style_pending = 1;
+	server_client_schedule_pane(wp);
 }
 
 void

@@ -381,7 +381,7 @@ server_destroy_pane(struct window_pane *wp, int notify)
 		if (options_get_number(wp->options, "remain-on-exit") == 0)
 			goto remove_pane;
 		wp->base.mode &= ~MODE_CURSOR;
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 		return;
 	}
 	if (~wp->flags & PANE_STATUSREADY)
@@ -421,7 +421,7 @@ server_destroy_pane(struct window_pane *wp, int notify)
 		}
 		wp->base.mode &= ~MODE_CURSOR;
 
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 		return;
 	}
 

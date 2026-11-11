@@ -1479,6 +1479,10 @@ struct window_pane {
 
 	TAILQ_ENTRY(window_pane) entry;  /* link in list of all panes */
 	TAILQ_ENTRY(window_pane) sentry; /* link in list of last visited */
+	int		loop_queued;
+	int		loop_buffer_pending;
+	int		loop_style_pending;
+	TAILQ_ENTRY(window_pane) loop_entry;
         TAILQ_ENTRY(window_pane) zentry; /* z-index link in list of all panes */
 	RB_ENTRY(window_pane) tree_entry;
 };
@@ -1564,6 +1568,8 @@ struct window {
 	TAILQ_HEAD(, winlink)	 winlinks;
 
 	RB_ENTRY(window)	 entry;
+	int			 loop_queued;
+	TAILQ_ENTRY(window)	 loop_entry;
 };
 RB_HEAD(windows, window);
 
@@ -3391,6 +3397,10 @@ void	 server_client_suspend(struct client *);
 void	 server_client_detach(struct client *, enum msgtype);
 void	 server_client_exec(struct client *, const char *);
 void	 server_client_loop(void);
+void	 server_client_schedule_window(struct window *);
+void	 server_client_cancel_window(struct window *);
+void	 server_client_schedule_pane(struct window_pane *);
+void	 server_client_cancel_pane(struct window_pane *);
 const char *server_client_get_cwd(struct client *, struct session *);
 void	 server_client_set_flags(struct client *, const char *);
 const char *server_client_get_flags(struct client *);
@@ -3834,6 +3844,7 @@ u_int		 window_count_panes(struct window *, int);
 void		 window_destroy_panes(struct window *);
 struct window_pane *window_pane_find_by_id_str(const char *);
 struct window_pane *window_pane_find_by_id(u_int);
+void		 window_pane_set_flags(struct window_pane *, int);
 int		 window_pane_destroy_ready(struct window_pane *);
 void		 window_pane_resize(struct window_pane *, u_int, u_int);
 void		 window_pane_clear_resizes(struct window_pane *,

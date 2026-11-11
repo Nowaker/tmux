@@ -1088,10 +1088,10 @@ input_parse_buffer(struct window_pane *wp, const u_char *buf, size_t len)
 	wp->output_generation++;
 	window_update_activity(wp->window);
 	if (~wp->flags & PANE_ACTIVITY) {
-		wp->flags |= PANE_ACTIVITY;
+		window_pane_set_flags(wp, PANE_ACTIVITY);
 		events_fire_pane("pane-activity", wp);
 	}
-	wp->flags |= PANE_CHANGED;
+	window_pane_set_flags(wp, PANE_CHANGED);
 
 	/* Flag new input while in a mode. */
 	if (!TAILQ_EMPTY(&wp->modes))
@@ -3132,7 +3132,7 @@ input_osc_10(struct input_ctx *ictx, const char *p)
 	if (ictx->palette != NULL) {
 		ictx->palette->fg = c;
 		if (wp != NULL)
-			wp->flags |= PANE_STYLECHANGED;
+			window_pane_set_flags(wp, PANE_STYLECHANGED);
 		screen_write_fullredraw(&ictx->ctx);
 	}
 }
@@ -3148,7 +3148,7 @@ input_osc_110(struct input_ctx *ictx, const char *p)
 	if (ictx->palette != NULL) {
 		ictx->palette->fg = 8;
 		if (wp != NULL)
-			wp->flags |= PANE_STYLECHANGED;
+			window_pane_set_flags(wp, PANE_STYLECHANGED);
 		screen_write_fullredraw(&ictx->ctx);
 	}
 }
@@ -3175,7 +3175,8 @@ input_osc_11(struct input_ctx *ictx, const char *p)
 	if (ictx->palette != NULL) {
 		ictx->palette->bg = c;
 		if (wp != NULL)
-			wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED);
+			window_pane_set_flags(wp,
+			    PANE_STYLECHANGED|PANE_THEMECHANGED);
 		screen_write_fullredraw(&ictx->ctx);
 	}
 }
@@ -3191,7 +3192,8 @@ input_osc_111(struct input_ctx *ictx, const char *p)
 	if (ictx->palette != NULL) {
 		ictx->palette->bg = 8;
 		if (wp != NULL)
-			wp->flags |= (PANE_STYLECHANGED|PANE_THEMECHANGED);
+			window_pane_set_flags(wp,
+			    PANE_STYLECHANGED|PANE_THEMECHANGED);
 		screen_write_fullredraw(&ictx->ctx);
 	}
 }

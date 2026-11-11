@@ -438,6 +438,7 @@ recalculate_size(struct window *w, int now)
 		w->new_ypixel = ypixel;
 
 		w->flags |= WINDOW_RESIZE;
+		server_client_schedule_window(w);
 		tty_update_window_offset(w);
 	}
 }

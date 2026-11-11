@@ -443,7 +443,7 @@ window_buffer_update(struct window_mode_entry *wme)
 	mode_tree_build(data->data);
 	mode_tree_draw(data->data);
 	window_buffer_draw_waiting(data);
-	data->wp->flags |= PANE_REDRAW;
+	window_pane_set_flags(data->wp, PANE_REDRAW);
 }
 
 static void
@@ -581,7 +581,7 @@ window_buffer_edit_close_cb(char *buf, size_t len, void *arg)
 			mode_tree_draw(data->data);
 			window_buffer_draw_waiting(data);
 		}
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 	}
 	window_buffer_finish_edit(ed);
 }
@@ -672,6 +672,6 @@ out:
 	else {
 		mode_tree_draw(mtd);
 		window_buffer_draw_waiting(data);
-		wp->flags |= PANE_REDRAW;
+		window_pane_set_flags(wp, PANE_REDRAW);
 	}
 }

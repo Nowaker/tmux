@@ -815,7 +815,7 @@ session_theme_changed(struct session *s)
 	if (s != NULL) {
 		RB_FOREACH(wl, winlinks, &s->windows) {
 			TAILQ_FOREACH(wp, &wl->window->panes, entry)
-			    wp->flags |= PANE_THEMECHANGED;
+			    window_pane_set_flags(wp, PANE_THEMECHANGED);
 		}
 	}
 }
