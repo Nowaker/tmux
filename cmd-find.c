@@ -191,30 +191,26 @@ cmd_find_best_session(struct session **slist, u_int ssize, int flags)
 static int
 cmd_find_best_session_with_window(struct cmd_find_state *fs)
 {
-	struct session	**slist = NULL;
-	u_int		  ssize;
-	struct session	 *s;
+	struct session	*s, *best = NULL;
+	struct winlink	*wl;
 
 	log_debug("%s: window is @%u", __func__, fs->w->id);
 
-	ssize = 0;
-	RB_FOREACH(s, sessions, &sessions) {
-		if (!session_has(s, fs->w))
+	TAILQ_FOREACH(wl, &fs->w->winlinks, wentry) {
+		s = wl->session;
+		if (!cmd_find_session_valid(s))
 			continue;
-		slist = xreallocarray(slist, ssize + 1, sizeof *slist);
-		slist[ssize++] = s;
+		/* The sessions tree broke activity-time ties by session name. */
+		if (cmd_find_session_better(s, best, fs->flags) ||
+		    (best != NULL &&
+		    !cmd_find_session_better(best, s, fs->flags) &&
+		    strcmp(s->name, best->name) < 0))
+			best = s;
 	}
-	if (ssize == 0)
-		goto fail;
-	fs->s = cmd_find_best_session(slist, ssize, fs->flags);
-	if (fs->s == NULL)
-		goto fail;
-	free(slist);
+	if (best == NULL)
+		return (-1);
+	fs->s = best;
 	return (cmd_find_best_winlink_with_window(fs));
-
-fail:
-	free(slist);
-	return (-1);
 }
 
 /*
